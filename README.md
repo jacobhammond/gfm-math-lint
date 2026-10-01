@@ -285,7 +285,7 @@ Add `gfm-math-lint` to your `.pre-commit-config.yaml` to validate equations and 
 ```yaml
 repos:
   - repo: https://github.com/jacobhammond/gfm-math-lint
-    rev: v0.1.0
+    rev: v0.1.1
     hooks:
       # Validates math, table, code fence, and boundary issues
       - id: gfm-math-lint
