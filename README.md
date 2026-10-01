@@ -13,10 +13,10 @@ Zero-dependency, high-performance GitHub Flavored Markdown (GFM) linter and auto
 
 - **Pure Standard Library**: Zero third-party runtime dependencies. Runs instantly with Python 3.11+.
 - **8-Zone Lexical State Machine**: High-fidelity tokenizer classifying document lines into `FRONTMATTER`, `FENCED_CODE`, `INLINE_CODE`, `DISPLAY_MATH`, `INLINE_MATH`, `TABLE`, `COMMENT`, and `PROSE` to eliminate false positives.
-- **Reverse-Offset Edit Algebra**: Deterministic bottom-up, right-to-left fix application guaranteeing strict idempotency: $\text{fix}(\text{fix}(c)) \equiv \text{fix}(c)$.
+- **Reverse-Offset Edit Algebra**: Deterministic bottom-up, right-to-left fix application guaranteeing strict idempotency: `fix(fix(c)) == fix(c)`.
 - **Unified Diff & In-Place Fixing**: Inspect exact changes in advance with `--diff` or auto-fix in-place with `fix` / `--fix`.
 - **GitHub Rendering Oracle (`verify`)**: Directly audits documents against GitHub's live REST API (`POST /markdown` or `gh api /markdown`) to detect unrendered math in prose, HTML tag collisions, and broken table grids.
-- **KaTeX Browser Preview with Zero Red Boxes**: Generates standalone HTML (`--html`) or opens a live browser preview (`--browser`) with automated HTML entity normalization (`&amp;gt;` → `>`) and duplicate MathML clipboard suppression (`output: "html"`).
+- **KaTeX Browser Preview with Zero Red Boxes**: Generates standalone HTML (`--html`) or opens a live browser preview (`--browser`) with automated entity normalization (e.g., restoring double-escaped `&amp;gt;` to `>`) and duplicate MathML clipboard suppression (`output: "html"`).
 - **Safe GitHub Commenting**: Post markdown-rendered comments to PRs and issues via `gh` CLI with stdin streaming (`--body-file -`), preventing shell expansion corruption of LaTeX equations.
 - **Pre-commit Native**: Exit code contract (`0` clean, `1` violations/fixes, `2` error) designed specifically for CI/CD and git hook workflows.
 
