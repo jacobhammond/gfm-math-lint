@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gfm-math-lint"
-version = "0.1.0"
+version = "0.1.1"
 description = "Linter and auto-fixer for GitHub-Flavored Markdown math (MathJax), tables, code fences, and Mermaid"
 authors = [{name = "Jacob Hammond", email = "114956625+jacobhammond@users.noreply.github.com"}]
 license = "MIT"
