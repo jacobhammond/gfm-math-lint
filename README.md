@@ -109,6 +109,20 @@ gfm-math-lint verify --html preview.html docs/specification.md
 gfm-math-lint verify --browser docs/specification.md
 ```
 
+#### Feature Requirements & Authentication Matrix
+
+`gfm-math-lint` follows an **offline-first** design: local linting and fixing never require network access or a GitHub account.
+
+| Feature / Command | Requires Internet? | Requires GitHub Account? | Rate Limit | Primary Transport |
+| :--- | :---: | :---: | :--- | :--- |
+| **`check` / `fix`** | **No** (100% Offline) | **No** | Unlimited (Local execution) | Built-in regex & 8-zone lexical state machine |
+| **`check-shell`** | **No** (100% Offline) | **No** | Unlimited (Local execution) | Built-in shell script AST/regex scanner |
+| **`verify` (Unauthenticated)** | **Yes** | **No** | **60 requests / hour** (per public IP) | Direct HTTPS `POST` to `/markdown` via stdlib `urllib.request` |
+| **`verify` (Authenticated)** | **Yes** | **Optional** | **5,000 requests / hour** (15,000/hr for GHEC) | `gh api /markdown` (if `gh` installed) or Bearer token |
+| **`comment`** | **Yes** | **Yes** (Write access) | Standard GitHub API limits | GitHub CLI (`gh`) with stdin streaming |
+
+> For full architectural details on token resolution order and API rate limit mechanics, see [Architecture & Engine Design: Section 2.D](docs/architecture.md#d-the-verifier--github-api-oracle-gfm_math_lintverifier).
+
 ### 5. Programmatic Python Library Usage
 
 `gfm-math-lint` can be imported directly into Python applications, test suites, or documentation generators:
