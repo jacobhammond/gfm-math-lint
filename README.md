@@ -20,6 +20,16 @@ Zero-dependency, high-performance GitHub Flavored Markdown (GFM) linter and auto
 - **Safe GitHub Commenting**: Post markdown-rendered comments to PRs and issues via `gh` CLI with stdin streaming (`--body-file -`), preventing shell expansion corruption of LaTeX equations, with live `--preview` rendering.
 - **Pre-commit Native**: Exit code contract (`0` clean, `1` violations/fixes, `2` error) designed specifically for CI/CD and git hook workflows.
 
+---
+
+## Documentation
+
+Comprehensive guides, references, and architectural records are available in the [`docs/`](docs/README.md) directory:
+
+- 🏛️ **[Architecture & Engine Design](docs/architecture.md):** 8-zone lexical state machine, multi-stage compilation pipeline, reverse-offset edit algebra, and verification mechanics.
+- 🐍 **[Python API Reference](docs/api.md):** Programmatic library reference (`Linter`, `LintResult`, `LintConfig`, `Verifier`) with integration recipes for pytest, CI, and Sphinx/MkDocs.
+- 📖 **[Complete Rule Catalog & Authoring Guide](docs/rules.md):** Detailed breakdown of all 19 rules, CommonMark/KaTeX failure mode mechanics, and custom rule development tutorial.
+- 📋 **[Architectural Decision Records (ADRs)](docs/adr/README.md):** Technical justifications for zero-dependency stdlib, reverse-offset edit algebra, state-machine tokenization, and live GitHub API verification.
 
 ---
 
@@ -107,9 +117,32 @@ gfm-math-lint verify --html preview.html docs/specification.md
 gfm-math-lint verify --browser docs/specification.md
 ```
 
+### 5. Programmatic Python Library Usage
+
+`gfm-math-lint` can be imported directly into Python applications, test suites, or documentation generators:
+
+```python
+from gfm_math_lint import Linter
+
+linter = Linter()
+result = linter.lint_string("# Document\n\n$x < y$", fix=True)
+
+if result.has_violations:
+    for violation in result.violations:
+        print(f"Line {violation.line}:{violation.col} [{violation.rule_id}] {violation.message}")
+
+if result.has_fixes:
+    print("Fixed content:\n", result.fixed_content)
+    print("Unified diff:\n", result.diff())
+```
+
+See the [Python API Reference](docs/api.md) for full method documentation and recipes.
+
 ---
 
 ## Rule Catalog
+
+For detailed failure explanations, good/bad examples, and custom rule development, see the [Complete Rule Catalog](docs/rules.md).
 
 ### Math & LaTeX Rules (`GFM-M**`)
 
@@ -164,6 +197,8 @@ gfm-math-lint verify --browser docs/specification.md
 ---
 
 ## Architectural Rationale & Standards Alignment
+
+For full engine design details and decision records, see [Architecture & Engine Design](docs/architecture.md) and [Architectural Decision Records (ADRs)](docs/adr/README.md).
 
 `gfm-math-lint` is engineered around the multi-stage parsing pipeline implemented by GitHub's rendering engine (`cmark-gfm` followed by client-side MathJax). Understanding this compilation model clarifies why these rules exist, why specific conversions are preferred, and how they align with authoritative web standards.
 
