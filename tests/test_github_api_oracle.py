@@ -87,14 +87,13 @@ def test_fixed_document_oracle() -> None:
     assert_gfm_rendering_clean(rendered_html)
 
 
-def test_plan_document_oracle() -> None:
-    """Test that the project plan document itself renders cleanly on GitHub's API."""
-    plan_path = Path("docs/gfm-math-lint-plan.md")
-    if not plan_path.is_file():
-        pytest.skip("docs/gfm-math-lint-plan.md not found.")
+def test_readme_document_oracle() -> None:
+    """Test that the project README document itself renders cleanly on GitHub's API."""
+    readme_path = Path("README.md")
+    if not readme_path.is_file():
+        pytest.skip("README.md not found.")
 
     linter = Linter()
-    # Lint and fix any stray violations if needed
-    result = linter.lint_file(plan_path, fix=False)
+    result = linter.lint_file(readme_path, fix=False)
     rendered_html = render_gfm_via_github_api(result.original_content)
     assert_gfm_rendering_clean(rendered_html)
