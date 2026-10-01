@@ -70,18 +70,40 @@ When multiple rules report violations across a document, applying text edits nai
 ---
 
 ### D. The Verifier & GitHub API Oracle (`gfm_math_lint.verifier`)
-Static linting alone cannot detect subtle browser rendering quirks. The `Verifier` audits markdown against two rendering engines:
+Static linting alone cannot detect subtle browser rendering quirks. The `Verifier` audits markdown against two rendering engines while preserving the project's zero-dependency standard-library design.
 
-1. **Live GitHub REST API Oracle:**
-   - Submits document content to GitHub's `/markdown` API endpoint (`mode: "gfm"`).
-   - Audits the resulting HTML DOM for:
-     - KaTeX errors (`class="katex-error"`).
-     - Table fracturing (mismatched column counts across rows).
-     - HTML tag collisions (e.g., `<i` or `_` emphasis corrupting math subscripts).
-2. **Zero-Red-Box Browser Preview Generator:**
-   - Synthesizes standalone preview HTML embedding KaTeX JS and CSS.
-   - Normalizes HTML entities inside math spans (`&amp;gt;` → `>`).
-   - Suppresses duplicate MathML clipboard pollution by configuring KaTeX to `output: "html"`, ensuring clean rendering across Chromium, Gecko, and WebKit browsers.
+#### 1. Feature Requirements & Authentication Matrix
+`gfm-math-lint` enforces an **offline-first** architecture: core linting and fixing never require network access or a GitHub account.
+
+| Feature / Command | Network Required? | Account Required? | Rate Limit | Transport Mechanism |
+| :--- | :---: | :---: | :--- | :--- |
+| **`check` / `fix`**<br>`gfm-math-lint check`<br>`gfm-math-lint fix` | **No** (100% Offline) | **No** | Unlimited (Local execution) | Built-in regex & 8-zone lexical state machine |
+| **`check-shell`**<br>`gfm-math-lint check-shell` | **No** (100% Offline) | **No** | Unlimited (Local execution) | Pure Python shell script AST/regex scanner |
+| **`verify` (Unauthenticated)**<br>`gfm-math-lint verify <file>` | **Yes** | **No** | **60 requests / hour** (per public IP) | Direct HTTPS `POST` to `https://api.github.com/markdown` via stdlib `urllib.request` |
+| **`verify` (Authenticated)**<br>`gfm-math-lint verify --token ...` | **Yes** | **Optional** | **5,000 requests / hour** (15,000/hr for GHEC) | `gh api /markdown` (if `gh` installed) or direct HTTPS with Bearer token |
+| **`comment`**<br>`gfm-math-lint comment --pr/--issue` | **Yes** | **Yes** (Write access) | Standard GitHub REST API limits | GitHub CLI (`gh pr comment` / `gh issue comment`) with stdin streaming |
+
+#### 2. Live GitHub REST API Oracle (`POST /markdown`)
+- Submits document content to GitHub's `/markdown` API endpoint (`mode: "gfm"`).
+- Audits the resulting HTML DOM for:
+  - KaTeX errors (`class="katex-error"`).
+  - Table fracturing (mismatched column counts across rows).
+  - HTML tag collisions (e.g., `<i` or `_` emphasis corrupting math subscripts).
+- **Authentication Resolution Order:**
+  1. *Explicit Token:* `--token <TOKEN>` flag passed via CLI or Python API.
+  2. *GitHub CLI:* Uses local `gh api /markdown` via stdlib `subprocess` (`shell=False`) if `gh` is authenticated.
+  3. *Environment Variables:* Inspects `GITHUB_TOKEN` or `GH_TOKEN`.
+  4. *Anonymous Fallback:* Executes unauthenticated HTTPS `POST` via stdlib `urllib.request`.
+- **Rate Limit Handling:** Unauthenticated verification requests are capped at 60 requests/hour by GitHub. Authenticated requests benefit from 5,000 requests/hour.
+
+#### 3. Zero-Red-Box Browser Preview Generator
+- Synthesizes standalone preview HTML embedding KaTeX JS and CSS.
+- Normalizes HTML entities inside math spans (`&amp;gt;` → `>`).
+- Suppresses duplicate MathML clipboard pollution by configuring KaTeX to `output: "html"`, ensuring clean rendering across Chromium, Gecko, and WebKit browsers.
+
+#### 4. Safe Commenting Pipeline (`gfm_math_lint.comment`)
+- Streams rendered comments to GitHub PRs and issues via `gh` CLI standard input (`--body-file -`).
+- Bypasses shell parameter expansion completely, ensuring LaTeX symbols (such as `$x$`, `$$...$$`, and backslashes) are transmitted without corruption.
 
 ---
 

@@ -13,10 +13,10 @@ Zero-dependency, high-performance GitHub Flavored Markdown (GFM) linter and auto
 
 - **Pure Standard Library**: Zero third-party runtime dependencies. Runs instantly with Python 3.11+.
 - **8-Zone Lexical State Machine**: High-fidelity tokenizer classifying document lines into `FRONTMATTER`, `FENCED_CODE`, `INLINE_CODE`, `DISPLAY_MATH`, `INLINE_MATH`, `TABLE`, `COMMENT`, and `PROSE` to eliminate false positives.
-- **Reverse-Offset Edit Algebra**: Deterministic bottom-up, right-to-left fix application guaranteeing strict idempotency: $\text{fix}(\text{fix}(c)) \equiv \text{fix}(c)$.
+- **Reverse-Offset Edit Algebra**: Deterministic bottom-up, right-to-left fix application guaranteeing strict idempotency: `fix(fix(c)) == fix(c)`.
 - **Unified Diff & In-Place Fixing**: Inspect exact changes in advance with `--diff` or auto-fix in-place with `fix` / `--fix`.
 - **GitHub Rendering Oracle (`verify`)**: Directly audits documents against GitHub's live REST API (`POST /markdown` or `gh api /markdown`) to detect unrendered math in prose, HTML tag collisions, and broken table grids.
-- **KaTeX Browser Preview with Zero Red Boxes**: Generates standalone HTML (`--html`) or opens a live browser preview (`--browser`) with automated HTML entity normalization (`&amp;gt;` → `>`) and duplicate MathML clipboard suppression (`output: "html"`).
+- **KaTeX Browser Preview with Zero Red Boxes**: Generates standalone HTML (`--html`) or opens a live browser preview (`--browser`) with automated entity normalization (e.g., restoring double-escaped `&amp;gt;` to `>`) and duplicate MathML clipboard suppression (`output: "html"`).
 - **Safe GitHub Commenting**: Post markdown-rendered comments to PRs and issues via `gh` CLI with stdin streaming (`--body-file -`), preventing shell expansion corruption of LaTeX equations.
 - **Pre-commit Native**: Exit code contract (`0` clean, `1` violations/fixes, `2` error) designed specifically for CI/CD and git hook workflows.
 
@@ -108,6 +108,20 @@ gfm-math-lint verify --html preview.html docs/specification.md
 # Launch KaTeX-rendered preview directly in your local default browser
 gfm-math-lint verify --browser docs/specification.md
 ```
+
+#### Feature Requirements & Authentication Matrix
+
+`gfm-math-lint` follows an **offline-first** design: local linting and fixing never require network access or a GitHub account.
+
+| Feature / Command | Requires Internet? | Requires GitHub Account? | Rate Limit | Primary Transport |
+| :--- | :---: | :---: | :--- | :--- |
+| **`check` / `fix`** | **No** (100% Offline) | **No** | Unlimited (Local execution) | Built-in regex & 8-zone lexical state machine |
+| **`check-shell`** | **No** (100% Offline) | **No** | Unlimited (Local execution) | Built-in shell script AST/regex scanner |
+| **`verify` (Unauthenticated)** | **Yes** | **No** | **60 requests / hour** (per public IP) | Direct HTTPS `POST` to `/markdown` via stdlib `urllib.request` |
+| **`verify` (Authenticated)** | **Yes** | **Optional** | **5,000 requests / hour** (15,000/hr for GHEC) | `gh api /markdown` (if `gh` installed) or Bearer token |
+| **`comment`** | **Yes** | **Yes** (Write access) | Standard GitHub API limits | GitHub CLI (`gh`) with stdin streaming |
+
+> For full architectural details on token resolution order and API rate limit mechanics, see [Architecture & Engine Design: Section 2.D](docs/architecture.md#d-the-verifier--github-api-oracle-gfm_math_lintverifier).
 
 ### 5. Programmatic Python Library Usage
 
