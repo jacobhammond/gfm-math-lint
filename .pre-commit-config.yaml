@@ -1,0 +1,103 @@
+# See https://pre-commit.com for more information
+# Pre-commit configuration scoped specifically for gfm-math-lint.
+# Preserves escape sequences, intentional error recordings, and documentation integrity.
+
+default_install_hook_types: [pre-commit]
+default_stages: [pre-commit]
+# Global waivers for test fixtures, scratch directories, vendored code, and archives
+exclude: '^(docs/archive/|vendor/|temp/|tests/fixtures/)'
+
+repos:
+  - repo: local
+    hooks:
+      # --- Code Hygiene & Syntax Sanity Checks ---
+      # Scoped to python, yaml, and toml to protect Markdown hard line breaks (CommonMark §6.7)
+      # and raw escape sequences in test fixtures from destructive whitespace stripping.
+      - id: trailing-whitespace
+        name: trailing-whitespace
+        entry: uv run --no-sync trailing-whitespace-fixer
+        language: system
+        types_or: [python, yaml, toml]
+
+      - id: end-of-file-fixer
+        name: end-of-file-fixer
+        entry: uv run --no-sync end-of-file-fixer
+        language: system
+        types_or: [python, yaml, toml, markdown]
+
+      - id: check-yaml
+        name: check-yaml
+        entry: uv run --no-sync check-yaml
+        language: system
+        types: [yaml]
+
+      - id: check-toml
+        name: check-toml
+        entry: uv run --no-sync check-toml
+        language: system
+        types: [toml]
+
+      - id: check-added-large-files
+        name: check-added-large-files
+        entry: uv run --no-sync check-added-large-files --maxkb=500
+        language: system
+
+      - id: detect-private-key
+        name: detect-private-key
+        entry: uv run --no-sync detect-private-key
+        language: system
+        types: [text]
+
+      - id: forbid-private-index
+        name: uv.lock must only reference pypi.org
+        entry: bash -c "grep -E 'registry = ' uv.lock | grep -v 'https://pypi.org/simple' && exit 1 || exit 0"
+        language: system
+        files: ^uv\.lock$
+        pass_filenames: false
+
+      # Enforce LF endings on source files, excluding tests to protect any CRLF test fixtures
+      - id: mixed-line-ending
+        name: mixed-line-ending
+        entry: uv run --no-sync mixed-line-ending --fix=lf
+        language: system
+        types_or: [python, yaml, toml, markdown]
+        exclude: '^tests/'
+
+      # --- Python Code Quality & Type Enforcement ---
+      # Ruff check and format operate with pyproject.toml waivers to protect LaTeX escape
+      # sequences, long test formulas, and intentional ambiguous characters (e.g. en-dashes).
+      - id: ruff
+        name: ruff
+        entry: uv run --no-sync ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff-format
+        entry: uv run --no-sync ruff format
+        language: system
+        types: [python]
+
+      - id: mypy
+        name: mypy (strict type-check)
+        entry: uv run --no-sync mypy src tests --strict
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # --- Documentation Guard & Shell Safeguards ---
+      # Runs gfm-math-lint in read-only check mode on markdown docs to protect intentional
+      # anti-patterns, documentation examples, and escape sequences from unwanted mutations.
+      - id: gfm-math-lint
+        name: gfm-math-lint (markdown math & formatting)
+        entry: uv run --no-sync gfm-math-lint check
+        language: system
+        types: [markdown]
+        exclude: '^tests/'
+
+      - id: gfm-shell-lint
+        name: gfm-shell-lint (unsafe shell math expansion)
+        entry: uv run --no-sync gfm-math-lint check-shell
+        language: system
+        types_or: [shell, yaml]
+        files: ^(\.github/workflows/|scripts/)

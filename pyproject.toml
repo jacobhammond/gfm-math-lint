@@ -1,0 +1,161 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gfm-math-lint"
+version = "0.1.0"
+description = "Linter and auto-fixer for GitHub-Flavored Markdown math (MathJax), tables, code fences, and Mermaid"
+authors = [{name = "Jacob Hammond", email = "114956625+jacobhammond@users.noreply.github.com"}]
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["markdown", "gfm", "linter", "katex", "mathjax", "pre-commit"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Documentation",
+    "Topic :: Software Development",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/jacobhammond/gfm-math-lint"
+Documentation = "https://github.com/jacobhammond/gfm-math-lint#readme"
+Repository = "https://github.com/jacobhammond/gfm-math-lint"
+Issues = "https://github.com/jacobhammond/gfm-math-lint/issues"
+Changelog = "https://github.com/jacobhammond/gfm-math-lint/blob/main/CHANGELOG.md"
+
+[project.scripts]
+gfm-math-lint = "gfm_math_lint.cli:main"
+
+[dependency-groups]
+dev = [
+    "bandit>=1.7.8",
+    "build>=1.2.0",
+    "mypy>=1.10",
+    "pip-audit>=2.7.3",
+    "pre-commit>=3.7",
+    "pre-commit-hooks>=4.6",
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "pytest-xdist>=3.6",
+    "ruff>=0.4",
+    "twine>=5.0.0",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/LICENSE",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/pyproject.toml",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.gfm-math-lint]
+exclude = [
+    "docs/archive/*",
+    "vendor/*",
+]
+ignore = []
+
+[tool.gfm-math-lint.per-file-ignores]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]
+markers = [
+    "network: tests that make live network calls (skipped by default)",
+]
+addopts = [
+    "--cov=gfm_math_lint",
+    "--cov-report=term-missing",
+    "-m",
+    "not network",
+]
+testpaths = ["tests"]
+filterwarnings = [
+    "error",
+    "default::EncodingWarning",
+    "error::EncodingWarning:gfm_math_lint",
+]
+
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["src/gfm_math_lint"]
+
+[tool.coverage.report]
+precision = 2
+omit = [
+    "src/gfm_math_lint/__init__.py",
+    "src/gfm_math_lint/__main__.py",
+]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pycodestyle & pyflakes
+    "I",             # isort
+    "UP",            # pyupgrade
+    "B",             # flake8-bugbear
+    "C4",            # flake8-comprehensions
+    "SIM",           # flake8-simplify
+    "TCH",           # flake8-type-checking
+    "Q",             # flake8-quotes
+    "RUF",           # ruff-specific
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gfm_math_lint"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests record real LaTeX error cases, unicode boundary tests (e.g. en-dashes),
+# raw escape sequences, and realistic sample equations.
+"tests/*" = [
+    "E501",    # Long string literals in test fixtures
+    "RUF001",  # Real ambiguous unicode characters in test cases (e.g., en-dash boundary checks)
+    "RUF002",  # Docstring unicode characters in test fixtures
+    "RUF003",  # Comment unicode characters in test notes
+    "TCH001",  # Test type imports
+    "TCH002",
+    "TCH003",
+]
+# Rule definitions contain raw regexes and LaTeX syntax patterns
+"src/gfm_math_lint/rules/*" = [
+    "RUF001",  # Unicode delimiters matching real document characters
+    "RUF003",  # Comments referencing real document characters
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.bandit]
+skips = ["B404", "B603"]

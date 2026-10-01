@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Environments
+.venv/
+.env
+
+# Testing & Coverage
+.coverage*
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# IDE & OS
+.idea/
+.vscode/
+.zed/
+.DS_Store
+
+# Temporary & Scratch
+temp/
+*.html
+preview.html
+.direnv/
+*.pem
+*.key
+

@@ -1,0 +1,12 @@
+- id: gfm-math-lint
+  name: gfm-math-lint (GFM math & Markdown rule validator)
+  entry: gfm-math-lint check
+  language: python
+  types: [markdown]
+
+- id: gfm-shell-lint
+  name: gfm-shell-lint (Unsafe GFM CLI script checker)
+  entry: gfm-math-lint check-shell
+  language: python
+  types_or: [shell, yaml]
+  files: ^(\.github/workflows/|scripts/)
