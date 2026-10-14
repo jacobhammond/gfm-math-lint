@@ -115,7 +115,7 @@ exclude_lines = [
 [tool.ruff]
 target-version = "py311"
 line-length = 120
-extend-exclude = ["docs"]
+extend-exclude = ["docs", "*.md"]
 
 [tool.ruff.lint]
 select = [
