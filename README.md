@@ -7,6 +7,10 @@
 
 Zero-dependency, high-performance GitHub Flavored Markdown (GFM) linter and auto-fixer specializing in LaTeX/MathJax math syntax, CommonMark table escaping, fenced code nesting, Mermaid diagram boundaries, shell script expansion guards, and modern AVIF asset recommendations.
 
+> [!IMPORTANT]
+> 🗺️ **Active Development Roadmap & Conformance Crucible:**  
+> Review [ROADMAP.md](ROADMAP.md) for the active multi-phase development roadmap, dual-engine (GitHub Web vs. local editor KaTeX) compatibility specifications, and the objective Conformance Crucible test harness design.
+
 ---
 
 ## Key Features
@@ -28,6 +32,7 @@ Comprehensive technical guides, API references, and architectural records are ma
 
 | Guide | Description |
 | :--- | :--- |
+| 🗺️ **[Development Roadmap & Retrospective](ROADMAP.md)** | Multi-phase development roadmap, Dual-Engine compatibility matrix, and Conformance Crucible gating harness. |
 | 🏛️ **[Architecture & Engine Design](docs/architecture.md)** | 8-zone lexical state machine, multi-stage compilation pipeline, reverse-offset edit algebra, and verification mechanics. |
 | 🐍 **[Python API Reference & Recipes](docs/api.md)** | Programmatic library reference (`Linter`, `LintResult`, `LintConfig`, `Verifier`) with recipes for pytest, CI, and Sphinx/MkDocs. |
 | 📖 **[Complete Rule Catalog & Authoring Guide](docs/rules.md)** | In-depth specifications for all 19 rules, CommonMark/KaTeX failure mode mechanics, and custom rule development tutorial. |
