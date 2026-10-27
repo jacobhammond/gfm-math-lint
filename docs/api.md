@@ -119,12 +119,12 @@ html_content = build_preview_html("# My Formula\n\n$$\\frac{1}{2}$$")
 ```
 
 #### Functions:
-- **`verify_file(file_path: Path, token: str | None = None) -> list[VerificationIssue]`**:
-  Renders a file via GitHub's API and inspects for KaTeX errors, table column mismatches, and tag collisions.
-- **`verify_markdown(content: str, token: str | None = None) -> list[VerificationIssue]`**:
+- **`verify_file(file_path: Path, token: str | None = None, stdout: bool = False) -> tuple[str, list[VerificationIssue]]`**:
+  Renders a file via GitHub's API and inspects for KaTeX errors, table column mismatches, tag collisions, split delimiters, and MathML pseudo-code stacking.
+- **`verify_markdown(content: str, file_path: str = "", token: str | None = None, stdout: bool = False) -> tuple[str, list[VerificationIssue]]`**:
   Renders raw Markdown content via GitHub's API.
-- **`build_preview_html(markdown_content: str, title: str = "GFM Math Preview", token: str | None = None) -> str`**:
-  Renders Markdown to a standalone HTML string with KaTeX styling and entity normalization.
+- **`build_preview_html(body_html: str, title: str = "GFM Math Preview") -> str`**:
+  Wraps rendered GFM HTML in a standalone preview document with KaTeX styling and entity normalization.
 
 ---
 

@@ -19,7 +19,7 @@ Zero-dependency, high-performance GitHub Flavored Markdown (GFM) linter and auto
 - **8-Zone Lexical State Machine**: High-fidelity tokenizer classifying document lines into `FRONTMATTER`, `FENCED_CODE`, `INLINE_CODE`, `DISPLAY_MATH`, `INLINE_MATH`, `TABLE`, `COMMENT`, and `PROSE` to eliminate false positives.
 - **Reverse-Offset Edit Algebra**: Deterministic bottom-up, right-to-left fix application guaranteeing strict idempotency: `fix(fix(c)) == fix(c)`.
 - **Unified Diff & In-Place Fixing**: Inspect exact changes in advance with `--diff` or auto-fix in-place with `fix` / `--fix`.
-- **GitHub Rendering Oracle (`verify`)**: Directly audits documents against GitHub's live REST API (`POST /markdown` or `gh api /markdown`) to detect unrendered math in prose, HTML tag collisions, and broken table grids.
+- **GitHub Rendering Oracle (`verify`)**: Directly audits documents against GitHub's live REST API (`POST /markdown` or `gh api /markdown`) to detect unrendered math in prose, HTML tag collisions, broken table grids, split delimiters across inline tags, and MathML pseudo-code stacking.
 - **KaTeX Browser Preview with Zero Red Boxes**: Generates standalone HTML (`--html`) or opens a live browser preview (`--browser`) with automated entity normalization (e.g., restoring double-escaped `&amp;gt;` to `>`) and duplicate MathML clipboard suppression (`output: "html"`).
 - **Safe GitHub Commenting**: Post markdown-rendered comments to PRs and issues via `gh` CLI with stdin streaming (`--body-file -`), preventing shell expansion corruption of LaTeX equations.
 - **Pre-commit Native**: Exit code contract (`0` clean, `1` violations/fixes, `2` error) designed specifically for CI/CD and git hook workflows.
@@ -106,6 +106,14 @@ Audit documents directly against GitHub's live REST API rendering oracle or gene
 ```bash
 # Verify markdown files against GitHub API oracle
 gfm-math-lint verify docs/ README.md
+
+# Verify piped markdown stream from stdin
+cat draft.md | gfm-math-lint verify -
+git show HEAD:README.md | gfm-math-lint verify -
+
+# Stream API-rendered HTML directly to stdout (diagnostics routed to stderr)
+gfm-math-lint verify --stdout docs/specification.md
+gfm-math-lint verify - --raw < draft.md > rendered.html
 
 # Export full rendered HTML preview
 gfm-math-lint verify --html preview.html docs/specification.md

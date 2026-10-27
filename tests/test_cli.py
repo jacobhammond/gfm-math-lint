@@ -202,3 +202,50 @@ def test_check_with_explicit_config(tmp_path: Path) -> None:
     # With ignore in config, it should pass with 0
     ret = main(["check", "--config", str(cfg_file), str(bad_file)])
     assert ret == 0
+
+
+def test_cli_verify_stdin(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test 'verify -' reads piped markdown from stdin."""
+    from unittest.mock import patch
+
+    clean_html = '<p><math-renderer class="js-inline-math">$x = y$</math-renderer></p>'
+    with (
+        patch("sys.stdin.read", return_value="$x = y$\n"),
+        patch("gfm_math_lint.verifier.render_gfm", return_value=clean_html),
+    ):
+        ret = main(["verify", "-"])
+        assert ret == 0
+        captured = capsys.readouterr()
+        assert "Auditing <stdin>" in captured.out
+
+
+def test_cli_verify_stdout_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Test 'verify --stdout' prints rendered HTML directly to stdout and diagnostics to stderr."""
+    from unittest.mock import patch
+
+    doc = tmp_path / "doc.md"
+    doc.write_text("$x = y$\n", encoding="utf-8")
+    clean_html = '<p><math-renderer class="js-inline-math">$x = y$</math-renderer></p>'
+
+    with patch("gfm_math_lint.verifier.render_gfm", return_value=clean_html):
+        ret = main(["verify", "--stdout", str(doc)])
+        assert ret == 0
+        captured = capsys.readouterr()
+        assert captured.out.strip() == clean_html.strip()
+        assert "Auditing 1 file(s)" in captured.err
+
+
+def test_cli_verify_raw_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Test 'verify --raw' (alias for --stdout) prints rendered HTML directly to stdout."""
+    from unittest.mock import patch
+
+    doc = tmp_path / "doc.md"
+    doc.write_text("$x = y$\n", encoding="utf-8")
+    clean_html = '<p><math-renderer class="js-inline-math">$x = y$</math-renderer></p>'
+
+    with patch("gfm_math_lint.verifier.render_gfm", return_value=clean_html):
+        ret = main(["verify", "--raw", str(doc)])
+        assert ret == 0
+        captured = capsys.readouterr()
+        assert captured.out.strip() == clean_html.strip()
+        assert "Auditing 1 file(s)" in captured.err
