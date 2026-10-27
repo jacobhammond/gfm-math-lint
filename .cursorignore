@@ -1,0 +1,2 @@
+# Shield raw test corpus from agent indexing to prevent overfitting to specific fixture text
+conformance/corpus/
