@@ -84,19 +84,23 @@ Scan bash/sh scripts and GitHub Actions workflows for unsafe double-quoted body 
 gfm-math-lint check-shell .github/workflows/ scripts/
 ```
 
-### 3. Safe GitHub Comment Posting
+### 3. Safe GitHub Commenting & Issue/PR Creation
 
-Post comments safely to GitHub issues and pull requests without shell expansion or argument size limits by piping content via stdin directly to `gh`:
+Post comments, issues, and pull requests safely without shell expansion or argument size limits by streaming content via stdin directly to `gh` (or using the `post` command alias):
 
 ```bash
-# Preview rendered markdown via GitHub REST API (POST /markdown)
+# Preview rendered markdown via GitHub REST API (POST /markdown with urllib fallback)
 gfm-math-lint comment --preview --file report.md
 
-# Post safely to a pull request
+# Post safely to an existing pull request or issue
 gfm-math-lint comment --pr 42 --file report.md
-
-# Post safely to an issue
 gfm-math-lint comment --issue 108 --file notes.md
+
+# Safely open a new issue via file streaming
+gfm-math-lint comment --create-issue --title "Math Bug Report" --file report.md --label bug
+
+# Or create a new pull request via stdin pipe
+cat spec.md | gfm-math-lint post --create-pr --title "Algorithm Specs" --base main --head feat
 ```
 
 ### 4. Semantic Verification & KaTeX Browser Preview

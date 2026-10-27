@@ -8,7 +8,7 @@ import sys
 from importlib import metadata
 from pathlib import Path
 
-from gfm_math_lint.comment import post_comment
+from gfm_math_lint.comment import create_issue, create_pr, post_comment, preview_markdown
 from gfm_math_lint.config import load_config
 from gfm_math_lint.linter import (
     Linter,
@@ -84,12 +84,24 @@ def get_parser() -> argparse.ArgumentParser:
     # comment subcommand
     comment_parser = subparsers.add_parser(
         "comment",
-        help="Safely post GFM comments to GitHub PRs/issues via gh CLI",
+        aliases=["post"],
+        help="Safely post GFM comments, issues, and PRs to GitHub via gh CLI",
     )
-    comment_parser.add_argument("--pr", type=int, help="Pull request number")
-    comment_parser.add_argument("--issue", type=int, help="Issue number")
+    comment_parser.add_argument("--pr", type=int, help="Pull request number to comment on")
+    comment_parser.add_argument("--issue", type=int, help="Issue number to comment on")
+    comment_parser.add_argument("--create-issue", action="store_true", help="Create a new GitHub issue")
+    comment_parser.add_argument("--create-pr", action="store_true", help="Create a new GitHub pull request")
+    comment_parser.add_argument("--title", help="Title for newly created issue or pull request")
+    comment_parser.add_argument("--label", action="append", dest="labels", help="Label to apply (can be repeated)")
+    comment_parser.add_argument(
+        "--assignee", action="append", dest="assignees", help="Assignee to assign (can be repeated)"
+    )
+    comment_parser.add_argument("--milestone", help="Milestone title or number")
+    comment_parser.add_argument("--base", help="Target base branch for pull request")
+    comment_parser.add_argument("--head", help="Source head branch for pull request")
     comment_parser.add_argument("--file", help="File containing markdown comment")
     comment_parser.add_argument("--repo", help="Target GitHub repository (owner/repo)")
+    comment_parser.add_argument("--token", help="GitHub Personal Access Token for API requests")
     comment_parser.add_argument("--preview", action="store_true", help="Preview rendered HTML via GitHub API")
 
     # verify subcommand
@@ -286,17 +298,34 @@ def cmd_check_shell(args: argparse.Namespace) -> int:
 
 
 def cmd_comment(args: argparse.Namespace) -> int:
-    """Execute 'comment' subcommand."""
+    """Execute 'comment' / 'post' subcommand."""
     if args.pr is not None and args.issue is not None:
         sys.stderr.write("Error: Cannot specify both --pr and --issue.\n")
         return 2
 
-    if not args.preview and args.pr is None and args.issue is None:
-        sys.stderr.write("Error: Either --pr, --issue, or --preview must be specified.\n")
+    action_modes = [
+        bool(args.pr is not None),
+        bool(args.issue is not None),
+        bool(getattr(args, "create_issue", False)),
+        bool(getattr(args, "create_pr", False)),
+        bool(getattr(args, "preview", False)),
+    ]
+
+    if sum(action_modes) == 0:
+        sys.stderr.write("Error: Either --pr, --issue, --create-issue, --create-pr, or --preview must be specified.\n")
+        return 2
+
+    if sum(action_modes) > 1 and not (args.preview and (args.pr is not None or args.issue is not None)):
+        sys.stderr.write("Error: Conflicting target action modes specified.\n")
+        return 2
+
+    if (getattr(args, "create_issue", False) or getattr(args, "create_pr", False)) and not getattr(args, "title", None):
+        action_name = "--create-issue" if getattr(args, "create_issue", False) else "--create-pr"
+        sys.stderr.write(f"Error: --title is required when using {action_name}.\n")
         return 2
 
     # Read content
-    if args.file:
+    if getattr(args, "file", None):
         p = Path(args.file)
         if not p.is_file():
             sys.stderr.write(f"Error: File not found: {args.file}\n")
@@ -311,10 +340,45 @@ def cmd_comment(args: argparse.Namespace) -> int:
         # Read from stdin
         content = sys.stdin.read()
 
-    target_type = "pr" if args.pr is not None else "issue"
-    target_id = args.pr if args.pr is not None else (args.issue or 0)
-
     try:
+        if args.preview:
+            rendered = preview_markdown(content, token=getattr(args, "token", None))
+            sys.stdout.write(rendered + ("\n" if not rendered.endswith("\n") else ""))
+            return 0
+
+        if getattr(args, "create_issue", False):
+            result = create_issue(
+                title=args.title,
+                content=content,
+                repo=args.repo,
+                labels=getattr(args, "labels", None),
+                assignees=getattr(args, "assignees", None),
+                milestone=getattr(args, "milestone", None),
+                token=getattr(args, "token", None),
+            )
+            url = result.get("url", "")
+            sys.stdout.write(f"Successfully created issue: {url}\n" if url else "Successfully created issue.\n")
+            return 0
+
+        if getattr(args, "create_pr", False):
+            result = create_pr(
+                title=args.title,
+                content=content,
+                repo=args.repo,
+                base=getattr(args, "base", None),
+                head=getattr(args, "head", None),
+                labels=getattr(args, "labels", None),
+                assignees=getattr(args, "assignees", None),
+                milestone=getattr(args, "milestone", None),
+                token=getattr(args, "token", None),
+            )
+            url = result.get("url", "")
+            msg = f"Successfully created pull request: {url}\n" if url else "Successfully created pull request.\n"
+            sys.stdout.write(msg)
+            return 0
+
+        target_type = "pr" if args.pr is not None else "issue"
+        target_id = args.pr if args.pr is not None else (args.issue or 0)
         result = post_comment(
             target_type=target_type,
             target_id=target_id,
@@ -322,10 +386,7 @@ def cmd_comment(args: argparse.Namespace) -> int:
             repo=args.repo,
             preview=args.preview,
         )
-        if args.preview:
-            sys.stdout.write(result.get("rendered_html", "") + "\n")
-        else:
-            sys.stdout.write(f"Successfully posted {target_type} comment on #{target_id}.\n")
+        sys.stdout.write(f"Successfully posted {target_type} comment on #{target_id}.\n")
         return 0
     except Exception as e:
         sys.stderr.write(f"Error: {e}\n")
@@ -473,7 +534,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_fix(args)
     elif args.command == "check-shell":
         return cmd_check_shell(args)
-    elif args.command == "comment":
+    elif args.command in ("comment", "post"):
         return cmd_comment(args)
     elif args.command == "verify":
         return cmd_verify(args)
