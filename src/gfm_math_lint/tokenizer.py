@@ -61,9 +61,9 @@ BLOCKQUOTE_FENCE_OPEN_RE = re.compile(r"^(\s{0,3}(?:>\s*)+)(`{3,}|~{3,})(.*)$")
 # Regex to detect display math delimiter lines: optional whitespace, $$, optional whitespace
 DISPLAY_MATH_LINE_RE = re.compile(r"^\s*\$\$\s*$")
 
-# Regex to detect HTML comment opening
+# Regex to detect HTML comment opening and closing (supports standard --> and HTML5 --!>)
 COMMENT_OPEN_RE = re.compile(r"<!--")
-COMMENT_CLOSE_RE = re.compile(r"-->")
+COMMENT_CLOSE_RE = re.compile(r"--!?>")
 
 TABLE_DELIM_CELL_RE = re.compile(r"^:?-+:?$")
 CURRENCY_SPAN_RE = re.compile(r"\$(\d+(?:,\d{3})*(?:\.\d{1,2})?(?:[kKmMbB]|(?=[,\s\.\)\?!]|$)))")
@@ -278,7 +278,7 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
             continue
 
         # 3. Check Multi-line HTML Comments starting at start of line
-        if line.strip().startswith("<!--") and "-->" not in line:
+        if line.strip().startswith("<!--") and not COMMENT_CLOSE_RE.search(line):
             start_line = i + 1
             comment_lines = [line]
             i += 1
@@ -286,7 +286,7 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
             while i < total:
                 curr_line = lines[i]
                 comment_lines.append(curr_line)
-                if "-->" in curr_line:
+                if COMMENT_CLOSE_RE.search(curr_line):
                     closed = True
                     i += 1
                     break
@@ -384,13 +384,13 @@ def scan_inline_spans(line: str, line_no: int) -> list[InlineSpan]:
     line_len = len(line)
 
     while idx < line_len:
-        # 1. HTML comments: <!-- ... -->
+        # 1. HTML comments: <!-- ... --> or <!-- ... --!>
         if line.startswith("<!--", idx):
-            close_idx = line.find("-->", idx + 4)
-            if close_idx != -1:
-                end_pos = close_idx + 3
+            m_close = COMMENT_CLOSE_RE.search(line, idx + 4)
+            if m_close is not None:
+                end_pos = m_close.end()
                 raw = line[idx:end_pos]
-                content = line[idx + 4 : close_idx].strip()
+                content = line[idx + 4 : m_close.start()].strip()
                 spans.append(
                     InlineSpan(
                         zone_type=Zone.COMMENT,
