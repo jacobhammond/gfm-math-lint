@@ -137,8 +137,8 @@ def test_comment_preview_success(
     comment_file.write_text("# Heading\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "gfm_math_lint.cli.post_comment",
-        lambda **kwargs: {"status": "preview", "rendered_html": "<h1>Heading</h1>"},
+        "gfm_math_lint.cli.preview_markdown",
+        lambda *args, **kwargs: "<h1>Heading</h1>\n",
     )
 
     ret = main(["comment", "--preview", "--file", str(comment_file)])
