@@ -5,7 +5,7 @@
 default_install_hook_types: [pre-commit]
 default_stages: [pre-commit]
 # Global waivers for test fixtures, scratch directories, vendored code, and archives
-exclude: '^(docs/archive/|vendor/|temp/|tests/fixtures/)'
+exclude: '^(docs/archive/|vendor/|temp/|tests/fixtures/|conformance/corpus/)'
 
 repos:
   - repo: local

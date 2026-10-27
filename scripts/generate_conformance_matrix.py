@@ -602,7 +602,8 @@ def main() -> int:
         scenario_id = f"syn_{idx:03d}"
         filename = f"{scenario_id}_{sc['filename_slug']}.md"
         file_path = output_dir / filename
-        file_path.write_text(sc["content"], encoding="utf-8")
+        content = sc["content"] if sc["content"].endswith("\n") else sc["content"] + "\n"
+        file_path.write_text(content, encoding="utf-8")
 
         manifest_scenarios.append(
             {
