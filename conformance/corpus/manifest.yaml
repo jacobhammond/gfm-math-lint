@@ -1,0 +1,1361 @@
+version: '1.0'
+description: GFM Math Lint Conformance Benchmark Corpus Manifest
+total_scenarios: 145
+scenarios:
+- id: syn_001
+  path: synthetic/syn_001_inline_single_subscript_inline_dollar_root_prose.md
+  category: synthetic
+  description: Inline single_subscript with inline_dollar in root_prose
+  expected_rules: &id001 []
+  structural_tags:
+  - container:root_prose
+  - construct:single_subscript
+  - delimiter:inline_dollar
+- id: syn_002
+  path: synthetic/syn_002_inline_single_subscript_inline_dollar_bullet_list.md
+  category: synthetic
+  description: Inline single_subscript with inline_dollar in bullet_list
+  expected_rules: *id001
+  structural_tags:
+  - container:bullet_list
+  - construct:single_subscript
+  - delimiter:inline_dollar
+- id: syn_003
+  path: synthetic/syn_003_inline_single_subscript_inline_dollar_nested_ordered_list.md
+  category: synthetic
+  description: Inline single_subscript with inline_dollar in nested_ordered_list
+  expected_rules: *id001
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:single_subscript
+  - delimiter:inline_dollar
+- id: syn_004
+  path: synthetic/syn_004_inline_single_subscript_inline_dollar_blockquote.md
+  category: synthetic
+  description: Inline single_subscript with inline_dollar in blockquote
+  expected_rules: *id001
+  structural_tags:
+  - container:blockquote
+  - construct:single_subscript
+  - delimiter:inline_dollar
+- id: syn_005
+  path: synthetic/syn_005_inline_single_subscript_inline_dollar_table_cell.md
+  category: synthetic
+  description: Inline single_subscript with inline_dollar in table_cell
+  expected_rules: *id001
+  structural_tags:
+  - container:table_cell
+  - construct:single_subscript
+  - delimiter:inline_dollar
+- id: syn_006
+  path: synthetic/syn_006_inline_single_subscript_inline_dollar_blockquote_in_list.md
+  category: synthetic
+  description: Inline single_subscript with inline_dollar in blockquote_in_list
+  expected_rules: *id001
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:single_subscript
+  - delimiter:inline_dollar
+- id: syn_007
+  path: synthetic/syn_007_inline_single_subscript_backtick_math_root_prose.md
+  category: synthetic
+  description: Inline single_subscript with backtick_math in root_prose
+  expected_rules: &id002 []
+  structural_tags:
+  - container:root_prose
+  - construct:single_subscript
+  - delimiter:backtick_math
+- id: syn_008
+  path: synthetic/syn_008_inline_single_subscript_backtick_math_bullet_list.md
+  category: synthetic
+  description: Inline single_subscript with backtick_math in bullet_list
+  expected_rules: *id002
+  structural_tags:
+  - container:bullet_list
+  - construct:single_subscript
+  - delimiter:backtick_math
+- id: syn_009
+  path: synthetic/syn_009_inline_single_subscript_backtick_math_nested_ordered_list.md
+  category: synthetic
+  description: Inline single_subscript with backtick_math in nested_ordered_list
+  expected_rules: *id002
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:single_subscript
+  - delimiter:backtick_math
+- id: syn_010
+  path: synthetic/syn_010_inline_single_subscript_backtick_math_blockquote.md
+  category: synthetic
+  description: Inline single_subscript with backtick_math in blockquote
+  expected_rules: *id002
+  structural_tags:
+  - container:blockquote
+  - construct:single_subscript
+  - delimiter:backtick_math
+- id: syn_011
+  path: synthetic/syn_011_inline_single_subscript_backtick_math_table_cell.md
+  category: synthetic
+  description: Inline single_subscript with backtick_math in table_cell
+  expected_rules: *id002
+  structural_tags:
+  - container:table_cell
+  - construct:single_subscript
+  - delimiter:backtick_math
+- id: syn_012
+  path: synthetic/syn_012_inline_single_subscript_backtick_math_blockquote_in_list.md
+  category: synthetic
+  description: Inline single_subscript with backtick_math in blockquote_in_list
+  expected_rules: *id002
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:single_subscript
+  - delimiter:backtick_math
+- id: syn_013
+  path: synthetic/syn_013_inline_dual_subscript_inline_dollar_root_prose.md
+  category: synthetic
+  description: Inline dual_subscript with inline_dollar in root_prose
+  expected_rules: &id003
+  - GFM-M12
+  structural_tags:
+  - container:root_prose
+  - construct:dual_subscript
+  - delimiter:inline_dollar
+- id: syn_014
+  path: synthetic/syn_014_inline_dual_subscript_inline_dollar_bullet_list.md
+  category: synthetic
+  description: Inline dual_subscript with inline_dollar in bullet_list
+  expected_rules: *id003
+  structural_tags:
+  - container:bullet_list
+  - construct:dual_subscript
+  - delimiter:inline_dollar
+- id: syn_015
+  path: synthetic/syn_015_inline_dual_subscript_inline_dollar_nested_ordered_list.md
+  category: synthetic
+  description: Inline dual_subscript with inline_dollar in nested_ordered_list
+  expected_rules: *id003
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:dual_subscript
+  - delimiter:inline_dollar
+- id: syn_016
+  path: synthetic/syn_016_inline_dual_subscript_inline_dollar_blockquote.md
+  category: synthetic
+  description: Inline dual_subscript with inline_dollar in blockquote
+  expected_rules: *id003
+  structural_tags:
+  - container:blockquote
+  - construct:dual_subscript
+  - delimiter:inline_dollar
+- id: syn_017
+  path: synthetic/syn_017_inline_dual_subscript_inline_dollar_table_cell.md
+  category: synthetic
+  description: Inline dual_subscript with inline_dollar in table_cell
+  expected_rules: *id003
+  structural_tags:
+  - container:table_cell
+  - construct:dual_subscript
+  - delimiter:inline_dollar
+- id: syn_018
+  path: synthetic/syn_018_inline_dual_subscript_inline_dollar_blockquote_in_list.md
+  category: synthetic
+  description: Inline dual_subscript with inline_dollar in blockquote_in_list
+  expected_rules: *id003
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:dual_subscript
+  - delimiter:inline_dollar
+- id: syn_019
+  path: synthetic/syn_019_inline_dual_subscript_backtick_math_root_prose.md
+  category: synthetic
+  description: Inline dual_subscript with backtick_math in root_prose
+  expected_rules: &id004 []
+  structural_tags:
+  - container:root_prose
+  - construct:dual_subscript
+  - delimiter:backtick_math
+- id: syn_020
+  path: synthetic/syn_020_inline_dual_subscript_backtick_math_bullet_list.md
+  category: synthetic
+  description: Inline dual_subscript with backtick_math in bullet_list
+  expected_rules: *id004
+  structural_tags:
+  - container:bullet_list
+  - construct:dual_subscript
+  - delimiter:backtick_math
+- id: syn_021
+  path: synthetic/syn_021_inline_dual_subscript_backtick_math_nested_ordered_list.md
+  category: synthetic
+  description: Inline dual_subscript with backtick_math in nested_ordered_list
+  expected_rules: *id004
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:dual_subscript
+  - delimiter:backtick_math
+- id: syn_022
+  path: synthetic/syn_022_inline_dual_subscript_backtick_math_blockquote.md
+  category: synthetic
+  description: Inline dual_subscript with backtick_math in blockquote
+  expected_rules: *id004
+  structural_tags:
+  - container:blockquote
+  - construct:dual_subscript
+  - delimiter:backtick_math
+- id: syn_023
+  path: synthetic/syn_023_inline_dual_subscript_backtick_math_table_cell.md
+  category: synthetic
+  description: Inline dual_subscript with backtick_math in table_cell
+  expected_rules: *id004
+  structural_tags:
+  - container:table_cell
+  - construct:dual_subscript
+  - delimiter:backtick_math
+- id: syn_024
+  path: synthetic/syn_024_inline_dual_subscript_backtick_math_blockquote_in_list.md
+  category: synthetic
+  description: Inline dual_subscript with backtick_math in blockquote_in_list
+  expected_rules: *id004
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:dual_subscript
+  - delimiter:backtick_math
+- id: syn_025
+  path: synthetic/syn_025_inline_log_index_inline_dollar_root_prose.md
+  category: synthetic
+  description: Inline log_index with inline_dollar in root_prose
+  expected_rules: &id005 []
+  structural_tags:
+  - container:root_prose
+  - construct:log_index
+  - delimiter:inline_dollar
+- id: syn_026
+  path: synthetic/syn_026_inline_log_index_inline_dollar_bullet_list.md
+  category: synthetic
+  description: Inline log_index with inline_dollar in bullet_list
+  expected_rules: *id005
+  structural_tags:
+  - container:bullet_list
+  - construct:log_index
+  - delimiter:inline_dollar
+- id: syn_027
+  path: synthetic/syn_027_inline_log_index_inline_dollar_nested_ordered_list.md
+  category: synthetic
+  description: Inline log_index with inline_dollar in nested_ordered_list
+  expected_rules: *id005
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:log_index
+  - delimiter:inline_dollar
+- id: syn_028
+  path: synthetic/syn_028_inline_log_index_inline_dollar_blockquote.md
+  category: synthetic
+  description: Inline log_index with inline_dollar in blockquote
+  expected_rules: *id005
+  structural_tags:
+  - container:blockquote
+  - construct:log_index
+  - delimiter:inline_dollar
+- id: syn_029
+  path: synthetic/syn_029_inline_log_index_inline_dollar_table_cell.md
+  category: synthetic
+  description: Inline log_index with inline_dollar in table_cell
+  expected_rules: *id005
+  structural_tags:
+  - container:table_cell
+  - construct:log_index
+  - delimiter:inline_dollar
+- id: syn_030
+  path: synthetic/syn_030_inline_log_index_inline_dollar_blockquote_in_list.md
+  category: synthetic
+  description: Inline log_index with inline_dollar in blockquote_in_list
+  expected_rules: *id005
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:log_index
+  - delimiter:inline_dollar
+- id: syn_031
+  path: synthetic/syn_031_inline_log_index_backtick_math_root_prose.md
+  category: synthetic
+  description: Inline log_index with backtick_math in root_prose
+  expected_rules: &id006 []
+  structural_tags:
+  - container:root_prose
+  - construct:log_index
+  - delimiter:backtick_math
+- id: syn_032
+  path: synthetic/syn_032_inline_log_index_backtick_math_bullet_list.md
+  category: synthetic
+  description: Inline log_index with backtick_math in bullet_list
+  expected_rules: *id006
+  structural_tags:
+  - container:bullet_list
+  - construct:log_index
+  - delimiter:backtick_math
+- id: syn_033
+  path: synthetic/syn_033_inline_log_index_backtick_math_nested_ordered_list.md
+  category: synthetic
+  description: Inline log_index with backtick_math in nested_ordered_list
+  expected_rules: *id006
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:log_index
+  - delimiter:backtick_math
+- id: syn_034
+  path: synthetic/syn_034_inline_log_index_backtick_math_blockquote.md
+  category: synthetic
+  description: Inline log_index with backtick_math in blockquote
+  expected_rules: *id006
+  structural_tags:
+  - container:blockquote
+  - construct:log_index
+  - delimiter:backtick_math
+- id: syn_035
+  path: synthetic/syn_035_inline_log_index_backtick_math_table_cell.md
+  category: synthetic
+  description: Inline log_index with backtick_math in table_cell
+  expected_rules: *id006
+  structural_tags:
+  - container:table_cell
+  - construct:log_index
+  - delimiter:backtick_math
+- id: syn_036
+  path: synthetic/syn_036_inline_log_index_backtick_math_blockquote_in_list.md
+  category: synthetic
+  description: Inline log_index with backtick_math in blockquote_in_list
+  expected_rules: *id006
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:log_index
+  - delimiter:backtick_math
+- id: syn_037
+  path: synthetic/syn_037_inline_fractional_ratio_inline_dollar_root_prose.md
+  category: synthetic
+  description: Inline fractional_ratio with inline_dollar in root_prose
+  expected_rules: &id007 []
+  structural_tags:
+  - container:root_prose
+  - construct:fractional_ratio
+  - delimiter:inline_dollar
+- id: syn_038
+  path: synthetic/syn_038_inline_fractional_ratio_inline_dollar_bullet_list.md
+  category: synthetic
+  description: Inline fractional_ratio with inline_dollar in bullet_list
+  expected_rules: *id007
+  structural_tags:
+  - container:bullet_list
+  - construct:fractional_ratio
+  - delimiter:inline_dollar
+- id: syn_039
+  path: synthetic/syn_039_inline_fractional_ratio_inline_dollar_nested_ordered_list.md
+  category: synthetic
+  description: Inline fractional_ratio with inline_dollar in nested_ordered_list
+  expected_rules: *id007
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:fractional_ratio
+  - delimiter:inline_dollar
+- id: syn_040
+  path: synthetic/syn_040_inline_fractional_ratio_inline_dollar_blockquote.md
+  category: synthetic
+  description: Inline fractional_ratio with inline_dollar in blockquote
+  expected_rules: *id007
+  structural_tags:
+  - container:blockquote
+  - construct:fractional_ratio
+  - delimiter:inline_dollar
+- id: syn_041
+  path: synthetic/syn_041_inline_fractional_ratio_inline_dollar_table_cell.md
+  category: synthetic
+  description: Inline fractional_ratio with inline_dollar in table_cell
+  expected_rules: *id007
+  structural_tags:
+  - container:table_cell
+  - construct:fractional_ratio
+  - delimiter:inline_dollar
+- id: syn_042
+  path: synthetic/syn_042_inline_fractional_ratio_inline_dollar_blockquote_in_list.md
+  category: synthetic
+  description: Inline fractional_ratio with inline_dollar in blockquote_in_list
+  expected_rules: *id007
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:fractional_ratio
+  - delimiter:inline_dollar
+- id: syn_043
+  path: synthetic/syn_043_inline_fractional_ratio_backtick_math_root_prose.md
+  category: synthetic
+  description: Inline fractional_ratio with backtick_math in root_prose
+  expected_rules: &id008 []
+  structural_tags:
+  - container:root_prose
+  - construct:fractional_ratio
+  - delimiter:backtick_math
+- id: syn_044
+  path: synthetic/syn_044_inline_fractional_ratio_backtick_math_bullet_list.md
+  category: synthetic
+  description: Inline fractional_ratio with backtick_math in bullet_list
+  expected_rules: *id008
+  structural_tags:
+  - container:bullet_list
+  - construct:fractional_ratio
+  - delimiter:backtick_math
+- id: syn_045
+  path: synthetic/syn_045_inline_fractional_ratio_backtick_math_nested_ordered_list.md
+  category: synthetic
+  description: Inline fractional_ratio with backtick_math in nested_ordered_list
+  expected_rules: *id008
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:fractional_ratio
+  - delimiter:backtick_math
+- id: syn_046
+  path: synthetic/syn_046_inline_fractional_ratio_backtick_math_blockquote.md
+  category: synthetic
+  description: Inline fractional_ratio with backtick_math in blockquote
+  expected_rules: *id008
+  structural_tags:
+  - container:blockquote
+  - construct:fractional_ratio
+  - delimiter:backtick_math
+- id: syn_047
+  path: synthetic/syn_047_inline_fractional_ratio_backtick_math_table_cell.md
+  category: synthetic
+  description: Inline fractional_ratio with backtick_math in table_cell
+  expected_rules: *id008
+  structural_tags:
+  - container:table_cell
+  - construct:fractional_ratio
+  - delimiter:backtick_math
+- id: syn_048
+  path: synthetic/syn_048_inline_fractional_ratio_backtick_math_blockquote_in_list.md
+  category: synthetic
+  description: Inline fractional_ratio with backtick_math in blockquote_in_list
+  expected_rules: *id008
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:fractional_ratio
+  - delimiter:backtick_math
+- id: syn_049
+  path: synthetic/syn_049_inline_register_identifier_inline_dollar_root_prose.md
+  category: synthetic
+  description: Inline register_identifier with inline_dollar in root_prose
+  expected_rules: &id009
+  - GFM-M03
+  - GFM-M14
+  structural_tags:
+  - container:root_prose
+  - construct:register_identifier
+  - delimiter:inline_dollar
+- id: syn_050
+  path: synthetic/syn_050_inline_register_identifier_inline_dollar_bullet_list.md
+  category: synthetic
+  description: Inline register_identifier with inline_dollar in bullet_list
+  expected_rules: *id009
+  structural_tags:
+  - container:bullet_list
+  - construct:register_identifier
+  - delimiter:inline_dollar
+- id: syn_051
+  path: synthetic/syn_051_inline_register_identifier_inline_dollar_nested_ordered_list.md
+  category: synthetic
+  description: Inline register_identifier with inline_dollar in nested_ordered_list
+  expected_rules: *id009
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:register_identifier
+  - delimiter:inline_dollar
+- id: syn_052
+  path: synthetic/syn_052_inline_register_identifier_inline_dollar_blockquote.md
+  category: synthetic
+  description: Inline register_identifier with inline_dollar in blockquote
+  expected_rules: *id009
+  structural_tags:
+  - container:blockquote
+  - construct:register_identifier
+  - delimiter:inline_dollar
+- id: syn_053
+  path: synthetic/syn_053_inline_register_identifier_inline_dollar_table_cell.md
+  category: synthetic
+  description: Inline register_identifier with inline_dollar in table_cell
+  expected_rules: *id009
+  structural_tags:
+  - container:table_cell
+  - construct:register_identifier
+  - delimiter:inline_dollar
+- id: syn_054
+  path: synthetic/syn_054_inline_register_identifier_inline_dollar_blockquote_in_list.md
+  category: synthetic
+  description: Inline register_identifier with inline_dollar in blockquote_in_list
+  expected_rules: *id009
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:register_identifier
+  - delimiter:inline_dollar
+- id: syn_055
+  path: synthetic/syn_055_inline_register_identifier_backtick_math_root_prose.md
+  category: synthetic
+  description: Inline register_identifier with backtick_math in root_prose
+  expected_rules: &id010
+  - GFM-M03
+  - GFM-M14
+  structural_tags:
+  - container:root_prose
+  - construct:register_identifier
+  - delimiter:backtick_math
+- id: syn_056
+  path: synthetic/syn_056_inline_register_identifier_backtick_math_bullet_list.md
+  category: synthetic
+  description: Inline register_identifier with backtick_math in bullet_list
+  expected_rules: *id010
+  structural_tags:
+  - container:bullet_list
+  - construct:register_identifier
+  - delimiter:backtick_math
+- id: syn_057
+  path: synthetic/syn_057_inline_register_identifier_backtick_math_nested_ordered_list.md
+  category: synthetic
+  description: Inline register_identifier with backtick_math in nested_ordered_list
+  expected_rules: *id010
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:register_identifier
+  - delimiter:backtick_math
+- id: syn_058
+  path: synthetic/syn_058_inline_register_identifier_backtick_math_blockquote.md
+  category: synthetic
+  description: Inline register_identifier with backtick_math in blockquote
+  expected_rules: *id010
+  structural_tags:
+  - container:blockquote
+  - construct:register_identifier
+  - delimiter:backtick_math
+- id: syn_059
+  path: synthetic/syn_059_inline_register_identifier_backtick_math_table_cell.md
+  category: synthetic
+  description: Inline register_identifier with backtick_math in table_cell
+  expected_rules: *id010
+  structural_tags:
+  - container:table_cell
+  - construct:register_identifier
+  - delimiter:backtick_math
+- id: syn_060
+  path: synthetic/syn_060_inline_register_identifier_backtick_math_blockquote_in_list.md
+  category: synthetic
+  description: Inline register_identifier with backtick_math in blockquote_in_list
+  expected_rules: *id010
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:register_identifier
+  - delimiter:backtick_math
+- id: syn_061
+  path: synthetic/syn_061_display_multiline_snr_display_dollar_root_prose.md
+  category: synthetic
+  description: Display multiline_snr with display_dollar in root_prose
+  expected_rules: []
+  structural_tags:
+  - container:root_prose
+  - construct:multiline_snr
+  - delimiter:display_dollar
+- id: syn_062
+  path: synthetic/syn_062_display_multiline_snr_display_dollar_bullet_list.md
+  category: synthetic
+  description: Display multiline_snr with display_dollar in bullet_list
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:bullet_list
+  - construct:multiline_snr
+  - delimiter:display_dollar
+- id: syn_063
+  path: synthetic/syn_063_display_multiline_snr_display_dollar_nested_ordered_list.md
+  category: synthetic
+  description: Display multiline_snr with display_dollar in nested_ordered_list
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:multiline_snr
+  - delimiter:display_dollar
+- id: syn_064
+  path: synthetic/syn_064_display_multiline_snr_display_dollar_blockquote.md
+  category: synthetic
+  description: Display multiline_snr with display_dollar in blockquote
+  expected_rules: []
+  structural_tags:
+  - container:blockquote
+  - construct:multiline_snr
+  - delimiter:display_dollar
+- id: syn_065
+  path: synthetic/syn_065_display_multiline_snr_display_dollar_blockquote_in_list.md
+  category: synthetic
+  description: Display multiline_snr with display_dollar in blockquote_in_list
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:multiline_snr
+  - delimiter:display_dollar
+- id: syn_066
+  path: synthetic/syn_066_display_multiline_snr_code_fence_root_prose.md
+  category: synthetic
+  description: Display multiline_snr with code_fence in root_prose
+  expected_rules:
+  - GFM-M01
+  structural_tags:
+  - container:root_prose
+  - construct:multiline_snr
+  - delimiter:code_fence
+- id: syn_067
+  path: synthetic/syn_067_display_multiline_snr_code_fence_bullet_list.md
+  category: synthetic
+  description: Display multiline_snr with code_fence in bullet_list
+  expected_rules: []
+  structural_tags:
+  - container:bullet_list
+  - construct:multiline_snr
+  - delimiter:code_fence
+- id: syn_068
+  path: synthetic/syn_068_display_multiline_snr_code_fence_nested_ordered_list.md
+  category: synthetic
+  description: Display multiline_snr with code_fence in nested_ordered_list
+  expected_rules: []
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:multiline_snr
+  - delimiter:code_fence
+- id: syn_069
+  path: synthetic/syn_069_display_multiline_snr_code_fence_blockquote.md
+  category: synthetic
+  description: Display multiline_snr with code_fence in blockquote
+  expected_rules: []
+  structural_tags:
+  - container:blockquote
+  - construct:multiline_snr
+  - delimiter:code_fence
+- id: syn_070
+  path: synthetic/syn_070_display_multiline_snr_code_fence_blockquote_in_list.md
+  category: synthetic
+  description: Display multiline_snr with code_fence in blockquote_in_list
+  expected_rules: []
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:multiline_snr
+  - delimiter:code_fence
+- id: syn_071
+  path: synthetic/syn_071_display_fractional_sum_display_dollar_root_prose.md
+  category: synthetic
+  description: Display fractional_sum with display_dollar in root_prose
+  expected_rules: []
+  structural_tags:
+  - container:root_prose
+  - construct:fractional_sum
+  - delimiter:display_dollar
+- id: syn_072
+  path: synthetic/syn_072_display_fractional_sum_display_dollar_bullet_list.md
+  category: synthetic
+  description: Display fractional_sum with display_dollar in bullet_list
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:bullet_list
+  - construct:fractional_sum
+  - delimiter:display_dollar
+- id: syn_073
+  path: synthetic/syn_073_display_fractional_sum_display_dollar_nested_ordered_list.md
+  category: synthetic
+  description: Display fractional_sum with display_dollar in nested_ordered_list
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:fractional_sum
+  - delimiter:display_dollar
+- id: syn_074
+  path: synthetic/syn_074_display_fractional_sum_display_dollar_blockquote.md
+  category: synthetic
+  description: Display fractional_sum with display_dollar in blockquote
+  expected_rules: []
+  structural_tags:
+  - container:blockquote
+  - construct:fractional_sum
+  - delimiter:display_dollar
+- id: syn_075
+  path: synthetic/syn_075_display_fractional_sum_display_dollar_blockquote_in_list.md
+  category: synthetic
+  description: Display fractional_sum with display_dollar in blockquote_in_list
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:fractional_sum
+  - delimiter:display_dollar
+- id: syn_076
+  path: synthetic/syn_076_display_fractional_sum_code_fence_root_prose.md
+  category: synthetic
+  description: Display fractional_sum with code_fence in root_prose
+  expected_rules:
+  - GFM-M01
+  structural_tags:
+  - container:root_prose
+  - construct:fractional_sum
+  - delimiter:code_fence
+- id: syn_077
+  path: synthetic/syn_077_display_fractional_sum_code_fence_bullet_list.md
+  category: synthetic
+  description: Display fractional_sum with code_fence in bullet_list
+  expected_rules: []
+  structural_tags:
+  - container:bullet_list
+  - construct:fractional_sum
+  - delimiter:code_fence
+- id: syn_078
+  path: synthetic/syn_078_display_fractional_sum_code_fence_nested_ordered_list.md
+  category: synthetic
+  description: Display fractional_sum with code_fence in nested_ordered_list
+  expected_rules: []
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:fractional_sum
+  - delimiter:code_fence
+- id: syn_079
+  path: synthetic/syn_079_display_fractional_sum_code_fence_blockquote.md
+  category: synthetic
+  description: Display fractional_sum with code_fence in blockquote
+  expected_rules: []
+  structural_tags:
+  - container:blockquote
+  - construct:fractional_sum
+  - delimiter:code_fence
+- id: syn_080
+  path: synthetic/syn_080_display_fractional_sum_code_fence_blockquote_in_list.md
+  category: synthetic
+  description: Display fractional_sum with code_fence in blockquote_in_list
+  expected_rules: []
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:fractional_sum
+  - delimiter:code_fence
+- id: syn_081
+  path: synthetic/syn_081_display_aligned_system_display_dollar_root_prose.md
+  category: synthetic
+  description: Display aligned_system with display_dollar in root_prose
+  expected_rules: []
+  structural_tags:
+  - container:root_prose
+  - construct:aligned_system
+  - delimiter:display_dollar
+- id: syn_082
+  path: synthetic/syn_082_display_aligned_system_display_dollar_bullet_list.md
+  category: synthetic
+  description: Display aligned_system with display_dollar in bullet_list
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:bullet_list
+  - construct:aligned_system
+  - delimiter:display_dollar
+- id: syn_083
+  path: synthetic/syn_083_display_aligned_system_display_dollar_nested_ordered_list.md
+  category: synthetic
+  description: Display aligned_system with display_dollar in nested_ordered_list
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:aligned_system
+  - delimiter:display_dollar
+- id: syn_084
+  path: synthetic/syn_084_display_aligned_system_display_dollar_blockquote.md
+  category: synthetic
+  description: Display aligned_system with display_dollar in blockquote
+  expected_rules: []
+  structural_tags:
+  - container:blockquote
+  - construct:aligned_system
+  - delimiter:display_dollar
+- id: syn_085
+  path: synthetic/syn_085_display_aligned_system_display_dollar_blockquote_in_list.md
+  category: synthetic
+  description: Display aligned_system with display_dollar in blockquote_in_list
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:aligned_system
+  - delimiter:display_dollar
+- id: syn_086
+  path: synthetic/syn_086_display_aligned_system_code_fence_root_prose.md
+  category: synthetic
+  description: Display aligned_system with code_fence in root_prose
+  expected_rules:
+  - GFM-M01
+  structural_tags:
+  - container:root_prose
+  - construct:aligned_system
+  - delimiter:code_fence
+- id: syn_087
+  path: synthetic/syn_087_display_aligned_system_code_fence_bullet_list.md
+  category: synthetic
+  description: Display aligned_system with code_fence in bullet_list
+  expected_rules: []
+  structural_tags:
+  - container:bullet_list
+  - construct:aligned_system
+  - delimiter:code_fence
+- id: syn_088
+  path: synthetic/syn_088_display_aligned_system_code_fence_nested_ordered_list.md
+  category: synthetic
+  description: Display aligned_system with code_fence in nested_ordered_list
+  expected_rules: []
+  structural_tags:
+  - container:nested_ordered_list
+  - construct:aligned_system
+  - delimiter:code_fence
+- id: syn_089
+  path: synthetic/syn_089_display_aligned_system_code_fence_blockquote.md
+  category: synthetic
+  description: Display aligned_system with code_fence in blockquote
+  expected_rules: []
+  structural_tags:
+  - container:blockquote
+  - construct:aligned_system
+  - delimiter:code_fence
+- id: syn_090
+  path: synthetic/syn_090_display_aligned_system_code_fence_blockquote_in_list.md
+  category: synthetic
+  description: Display aligned_system with code_fence in blockquote_in_list
+  expected_rules: []
+  structural_tags:
+  - container:blockquote_in_list
+  - construct:aligned_system
+  - delimiter:code_fence
+- id: syn_091
+  path: synthetic/syn_091_list_math_indent_0_$$_blank_True.md
+  category: synthetic
+  description: List Math Indent 0 with $$
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:0
+  - delimiter:display_dollar
+  - blank_above:True
+- id: syn_092
+  path: synthetic/syn_092_list_math_indent_0_$$_blank_False.md
+  category: synthetic
+  description: List Math Indent 0 with $$
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:0
+  - delimiter:display_dollar
+  - blank_above:False
+- id: syn_093
+  path: synthetic/syn_093_list_math_indent_0_fencefencefence_blank_True.md
+  category: synthetic
+  description: List Math Indent 0 with ```math
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:0
+  - delimiter:code_fence
+  - blank_above:True
+- id: syn_094
+  path: synthetic/syn_094_list_math_indent_0_fencefencefence_blank_False.md
+  category: synthetic
+  description: List Math Indent 0 with ```math
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:0
+  - delimiter:code_fence
+  - blank_above:False
+- id: syn_095
+  path: synthetic/syn_095_list_math_indent_2_$$_blank_True.md
+  category: synthetic
+  description: List Math Indent 2 with $$
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_list
+  - indent:2
+  - delimiter:display_dollar
+  - blank_above:True
+- id: syn_096
+  path: synthetic/syn_096_list_math_indent_2_$$_blank_False.md
+  category: synthetic
+  description: List Math Indent 2 with $$
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_list
+  - indent:2
+  - delimiter:display_dollar
+  - blank_above:False
+- id: syn_097
+  path: synthetic/syn_097_list_math_indent_2_fencefencefence_blank_True.md
+  category: synthetic
+  description: List Math Indent 2 with ```math
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:2
+  - delimiter:code_fence
+  - blank_above:True
+- id: syn_098
+  path: synthetic/syn_098_list_math_indent_2_fencefencefence_blank_False.md
+  category: synthetic
+  description: List Math Indent 2 with ```math
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:2
+  - delimiter:code_fence
+  - blank_above:False
+- id: syn_099
+  path: synthetic/syn_099_list_math_indent_4_$$_blank_True.md
+  category: synthetic
+  description: List Math Indent 4 with $$
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_list
+  - indent:4
+  - delimiter:display_dollar
+  - blank_above:True
+- id: syn_100
+  path: synthetic/syn_100_list_math_indent_4_$$_blank_False.md
+  category: synthetic
+  description: List Math Indent 4 with $$
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_list
+  - indent:4
+  - delimiter:display_dollar
+  - blank_above:False
+- id: syn_101
+  path: synthetic/syn_101_list_math_indent_4_fencefencefence_blank_True.md
+  category: synthetic
+  description: List Math Indent 4 with ```math
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:4
+  - delimiter:code_fence
+  - blank_above:True
+- id: syn_102
+  path: synthetic/syn_102_list_math_indent_4_fencefencefence_blank_False.md
+  category: synthetic
+  description: List Math Indent 4 with ```math
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:4
+  - delimiter:code_fence
+  - blank_above:False
+- id: syn_103
+  path: synthetic/syn_103_list_math_indent_6_$$_blank_True.md
+  category: synthetic
+  description: List Math Indent 6 with $$
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_list
+  - indent:6
+  - delimiter:display_dollar
+  - blank_above:True
+- id: syn_104
+  path: synthetic/syn_104_list_math_indent_6_$$_blank_False.md
+  category: synthetic
+  description: List Math Indent 6 with $$
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_list
+  - indent:6
+  - delimiter:display_dollar
+  - blank_above:False
+- id: syn_105
+  path: synthetic/syn_105_list_math_indent_6_fencefencefence_blank_True.md
+  category: synthetic
+  description: List Math Indent 6 with ```math
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:6
+  - delimiter:code_fence
+  - blank_above:True
+- id: syn_106
+  path: synthetic/syn_106_list_math_indent_6_fencefencefence_blank_False.md
+  category: synthetic
+  description: List Math Indent 6 with ```math
+  expected_rules: []
+  structural_tags:
+  - container:nested_list
+  - indent:6
+  - delimiter:code_fence
+  - blank_above:False
+- id: syn_107
+  path: synthetic/syn_107_diagram_mermaid_newline_root_prose.md
+  category: synthetic
+  description: Diagram mermaid_newline in root_prose
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:root_prose
+  - construct:mermaid_newline
+  - diagram:mermaid
+- id: syn_108
+  path: synthetic/syn_108_diagram_mermaid_newline_bullet_list.md
+  category: synthetic
+  description: Diagram mermaid_newline in bullet_list
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:bullet_list
+  - construct:mermaid_newline
+  - diagram:mermaid
+- id: syn_109
+  path: synthetic/syn_109_diagram_mermaid_newline_blockquote.md
+  category: synthetic
+  description: Diagram mermaid_newline in blockquote
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:blockquote
+  - construct:mermaid_newline
+  - diagram:mermaid
+- id: syn_110
+  path: synthetic/syn_110_diagram_mermaid_newline_nested_list.md
+  category: synthetic
+  description: Diagram mermaid_newline in nested_list
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:nested_list
+  - construct:mermaid_newline
+  - diagram:mermaid
+- id: syn_111
+  path: synthetic/syn_111_diagram_mermaid_subgraph_root_prose.md
+  category: synthetic
+  description: Diagram mermaid_subgraph in root_prose
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:root_prose
+  - construct:mermaid_subgraph
+  - diagram:mermaid
+- id: syn_112
+  path: synthetic/syn_112_diagram_mermaid_subgraph_bullet_list.md
+  category: synthetic
+  description: Diagram mermaid_subgraph in bullet_list
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:bullet_list
+  - construct:mermaid_subgraph
+  - diagram:mermaid
+- id: syn_113
+  path: synthetic/syn_113_diagram_mermaid_subgraph_blockquote.md
+  category: synthetic
+  description: Diagram mermaid_subgraph in blockquote
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:blockquote
+  - construct:mermaid_subgraph
+  - diagram:mermaid
+- id: syn_114
+  path: synthetic/syn_114_diagram_mermaid_subgraph_nested_list.md
+  category: synthetic
+  description: Diagram mermaid_subgraph in nested_list
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:nested_list
+  - construct:mermaid_subgraph
+  - diagram:mermaid
+- id: syn_115
+  path: synthetic/syn_115_diagram_mermaid_unquoted_root_prose.md
+  category: synthetic
+  description: Diagram mermaid_unquoted in root_prose
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:root_prose
+  - construct:mermaid_unquoted
+  - diagram:mermaid
+- id: syn_116
+  path: synthetic/syn_116_diagram_mermaid_unquoted_bullet_list.md
+  category: synthetic
+  description: Diagram mermaid_unquoted in bullet_list
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:bullet_list
+  - construct:mermaid_unquoted
+  - diagram:mermaid
+- id: syn_117
+  path: synthetic/syn_117_diagram_mermaid_unquoted_blockquote.md
+  category: synthetic
+  description: Diagram mermaid_unquoted in blockquote
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:blockquote
+  - construct:mermaid_unquoted
+  - diagram:mermaid
+- id: syn_118
+  path: synthetic/syn_118_diagram_mermaid_unquoted_nested_list.md
+  category: synthetic
+  description: Diagram mermaid_unquoted in nested_list
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - container:nested_list
+  - construct:mermaid_unquoted
+  - diagram:mermaid
+- id: syn_119
+  path: synthetic/syn_119_torture_table_with_math_and_subscripts.md
+  category: synthetic
+  description: 'Torture: Table with Inline Subscripts and Equations'
+  expected_rules:
+  - GFM-M12
+  structural_tags:
+  - container:table
+  - construct:dual_subscript
+  - delimiter:inline_dollar
+- id: syn_120
+  path: synthetic/syn_120_torture_nested_list_blockquote_display_math.md
+  category: synthetic
+  description: 'Torture: Nested List with Blockquote and Display Math'
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - container:nested_list
+  - container:blockquote
+  - delimiter:display_dollar
+- id: syn_121
+  path: synthetic/syn_121_torture_mermaid_diagram_and_inline_subscripts.md
+  category: synthetic
+  description: 'Torture: Mermaid Diagram Adjacent to Inline Subscripts'
+  expected_rules:
+  - GFM-M12
+  - GFM-D03
+  structural_tags:
+  - construct:dual_subscript
+  - diagram:mermaid
+  - delimiter:inline_dollar
+- id: syn_122
+  path: synthetic/syn_122_torture_register_names_in_math_and_prose.md
+  category: synthetic
+  description: 'Torture: Snake Case Register Identifiers in Math'
+  expected_rules:
+  - GFM-M03
+  - GFM-M14
+  structural_tags:
+  - construct:register_identifier
+  - delimiter:inline_dollar
+- id: syn_123
+  path: synthetic/syn_123_torture_backtick_math_in_all_containers.md
+  category: synthetic
+  description: 'Torture: Backtick Math Across Multiple Containers'
+  expected_rules: []
+  structural_tags:
+  - construct:dual_subscript
+  - delimiter:backtick_math
+- id: syn_124
+  path: synthetic/syn_124_torture_code_fence_math_in_nested_list.md
+  category: synthetic
+  description: 'Torture: Preserved Code Fence Math in Nested List'
+  expected_rules: []
+  structural_tags:
+  - container:bullet_list
+  - delimiter:code_fence
+- id: syn_125
+  path: synthetic/syn_125_edge_table_pipe_in_math.md
+  category: synthetic
+  description: 'Edge: Table Cell with Unescaped Pipe in Math Mode'
+  expected_rules:
+  - GFM-M15
+  - GFM-T01
+  structural_tags:
+  - container:table
+  - edge:table_pipe
+- id: syn_126
+  path: synthetic/syn_126_edge_table_pipe_escaped.md
+  category: synthetic
+  description: 'Edge: Table Cell with Escaped Pipe Macros in Math Mode'
+  expected_rules: []
+  structural_tags:
+  - container:table
+  - edge:table_pipe_clean
+- id: syn_127
+  path: synthetic/syn_127_edge_unicode_en_dash_math.md
+  category: synthetic
+  description: 'Edge: Math Expression with Unicode En-Dash'
+  expected_rules:
+  - GFM-M15
+  structural_tags:
+  - edge:unicode_dash
+  - delimiter:inline_dollar
+- id: syn_128
+  path: synthetic/syn_128_edge_unescaped_percent_math.md
+  category: synthetic
+  description: 'Edge: Math Expression with Unescaped Percent Sign'
+  expected_rules:
+  - GFM-M15
+  structural_tags:
+  - edge:percent_comment
+  - delimiter:inline_dollar
+- id: syn_129
+  path: synthetic/syn_129_edge_aligned_environment_display.md
+  category: synthetic
+  description: 'Edge: Display Math Aligned Environment'
+  expected_rules: []
+  structural_tags:
+  - construct:aligned
+  - delimiter:display_dollar
+- id: syn_130
+  path: synthetic/syn_130_edge_cases_environment_display.md
+  category: synthetic
+  description: 'Edge: Display Math Cases Environment'
+  expected_rules: []
+  structural_tags:
+  - construct:cases
+  - delimiter:display_dollar
+- id: syn_131
+  path: synthetic/syn_131_edge_consecutive_inline_math.md
+  category: synthetic
+  description: 'Edge: Consecutive Inline Math Expressions on Single Line'
+  expected_rules: []
+  structural_tags:
+  - construct:consecutive_spans
+  - delimiter:inline_dollar
+- id: syn_132
+  path: synthetic/syn_132_edge_math_adjacent_to_code.md
+  category: synthetic
+  description: 'Edge: Math Expression Immediately Adjacent to Inline Code'
+  expected_rules: []
+  structural_tags:
+  - construct:adjacent_code
+  - delimiter:inline_dollar
+- id: syn_133
+  path: synthetic/syn_133_edge_math_in_ordered_list_header.md
+  category: synthetic
+  description: 'Edge: Math Expression in Ordered List Item Header'
+  expected_rules: []
+  structural_tags:
+  - container:ordered_list
+  - delimiter:inline_dollar
+- id: syn_134
+  path: synthetic/syn_134_edge_math_in_task_list_item.md
+  category: synthetic
+  description: 'Edge: Math Expression in GFM Task List Item'
+  expected_rules: []
+  structural_tags:
+  - container:task_list
+  - delimiter:inline_dollar
+- id: syn_135
+  path: synthetic/syn_135_edge_math_with_currency_symbol.md
+  category: synthetic
+  description: 'Edge: Document Mixing Prose Currency and Inline Math'
+  expected_rules: []
+  structural_tags:
+  - construct:currency_and_math
+  - delimiter:inline_dollar
+- id: syn_136
+  path: synthetic/syn_136_edge_mermaid_with_html_br.md
+  category: synthetic
+  description: 'Edge: Mermaid Diagram Node Already Using Clean HTML Break'
+  expected_rules: []
+  structural_tags:
+  - diagram:mermaid
+  - edge:compliant_break
+- id: syn_137
+  path: synthetic/syn_137_edge_mermaid_double_quoted_label.md
+  category: synthetic
+  description: 'Edge: Mermaid Node with Double Quoted String Containing Newline'
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - diagram:mermaid
+  - edge:quoted_newline
+- id: reg_01
+  path: regressions/reg_01_subscript_collision.md
+  category: regressions
+  description: 'REG-01: Dual subscript inline math underscore collision'
+  expected_rules:
+  - GFM-M12
+  structural_tags:
+  - regression
+  - construct:dual_subscript
+  - delimiter:inline_dollar
+- id: reg_02
+  path: regressions/reg_02_indented_display_math_list.md
+  category: regressions
+  description: 'REG-02: Indented display math in list item'
+  expected_rules:
+  - GFM-M02
+  structural_tags:
+  - regression
+  - container:bullet_list
+  - delimiter:display_dollar
+- id: reg_03
+  path: regressions/reg_03_code_fence_list_preserved.md
+  category: regressions
+  description: 'REG-03: Code fence math in list preserved without conversion'
+  expected_rules: []
+  structural_tags:
+  - regression
+  - container:bullet_list
+  - delimiter:code_fence
+- id: reg_04
+  path: regressions/reg_04_snake_case_math.md
+  category: regressions
+  description: 'REG-04: Snake case register identifier in math mode'
+  expected_rules:
+  - GFM-M03
+  - GFM-M14
+  structural_tags:
+  - regression
+  - construct:register_identifier
+- id: reg_05
+  path: regressions/reg_05_unrendered_html_breakdown.md
+  category: regressions
+  description: 'REG-05: HTML parser slice breakdown with leaked tags'
+  expected_rules: []
+  structural_tags:
+  - regression
+  - html:breakdown
+- id: reg_06
+  path: regressions/reg_06_cleanable_file.md
+  category: regressions
+  description: 'REG-06: Cleanable file resolving to 0 violations'
+  expected_rules:
+  - GFM-M12
+  structural_tags:
+  - regression
+  - lifecycle:convergence
+- id: reg_07
+  path: regressions/reg_07_mermaid_literal_newline.md
+  category: regressions
+  description: 'REG-07: Mermaid node label with literal \n sequence'
+  expected_rules:
+  - GFM-D03
+  structural_tags:
+  - regression
+  - diagram:mermaid
+- id: wild_01
+  path: wild/wild_01_telemetry_metric_report.md
+  category: wild
+  description: 'WILD-01: Scrubbed Hardware Telemetry Calibration Specification'
+  expected_rules:
+  - GFM-M02
+  - GFM-M03
+  - GFM-M12
+  - GFM-D03
+  structural_tags:
+  - wild
+  - telemetry
+  - composite
