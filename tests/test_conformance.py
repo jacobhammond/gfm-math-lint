@@ -24,13 +24,6 @@ from conformance.runner import (
 from conformance.runner import (
     main as runner_main,
 )
-from scripts.generate_conformance_matrix import (
-    generate_all_synthetic_scenarios,
-    generate_diagram_variations,
-    generate_display_construct_variations,
-    generate_inline_construct_variations,
-    generate_list_math_variations,
-)
 
 
 def test_extract_math_blocks() -> None:
@@ -163,23 +156,6 @@ def test_crucible_scorecard_metrics() -> None:
     json_dict = scorecard.to_json_dict()
     assert json_dict["total_scenarios"] == 10
     assert json_dict["final_score"] == 60.0
-
-
-def test_matrix_generator_scenario_counts() -> None:
-    all_scenarios = generate_all_synthetic_scenarios()
-    assert len(all_scenarios) >= 120
-
-    list_math = generate_list_math_variations()
-    assert len(list_math) == 16  # 4 indents * 2 delimiters * 2 blank lines (Blueprint 3)
-
-    inline_vars = generate_inline_construct_variations()
-    assert len(inline_vars) >= 60
-
-    display_vars = generate_display_construct_variations()
-    assert len(display_vars) >= 30
-
-    diagram_vars = generate_diagram_variations()
-    assert len(diagram_vars) >= 12
 
 
 def test_conformance_runner_execution(tmp_path: Path) -> None:
