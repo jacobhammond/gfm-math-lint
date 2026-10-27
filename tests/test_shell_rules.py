@@ -29,3 +29,33 @@ def test_rule_s01_safe_heredoc_not_flagged() -> None:
     safe_script = "#!/usr/bin/env bash\ngh pr comment $PR_NO --body-file - << 'EOF'\nCalculated: $x_1$ ± $sigma$\nEOF\n"
     lines = safe_script.splitlines(keepends=True)
     assert len(rule.check(lines, [])) == 0
+
+
+def test_rule_s01_unsafe_gh_issue_create() -> None:
+    rule = RuleS01()
+    script = '#!/usr/bin/env bash\ngh issue create --title "Benchmark Report" --body "Equation: $x_1$"\n'
+    lines = script.splitlines(keepends=True)
+    violations = rule.check(lines, [])
+    assert len(violations) == 1
+    assert violations[0].rule_id == "GFM-S01"
+
+
+def test_rule_s01_unsafe_gh_pr_create() -> None:
+    rule = RuleS01()
+    script = '#!/usr/bin/env bash\ngh pr create --title "Feature PR" -b "Result: $(date)"\n'
+    lines = script.splitlines(keepends=True)
+    violations = rule.check(lines, [])
+    assert len(violations) == 1
+    assert violations[0].rule_id == "GFM-S01"
+
+
+def test_rule_s01_safe_gh_issue_create_heredoc() -> None:
+    rule = RuleS01()
+    safe_script = (
+        "#!/usr/bin/env bash\n"
+        "gh issue create --title \"Benchmark Report\" --body-file - << 'EOF'\n"
+        "Equation: $x_1$\n"
+        "EOF\n"
+    )
+    lines = safe_script.splitlines(keepends=True)
+    assert len(rule.check(lines, [])) == 0

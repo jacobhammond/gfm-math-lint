@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from gfm_math_lint.tokenizer import DocumentZone
 
 GH_CALL_PATTERN = re.compile(
-    r"\bgh\s+(?:pr\s+comment|issue\s+comment|release\s+create)\b.*?(?:-b|--body|--notes)(?:=|\s+)\"((?:\\\"|[^\"])*?)\""
+    r"\bgh\s+(?:pr\s+comment|issue\s+comment|release\s+create|issue\s+create|pr\s+create)\b.*?(?:-b|--body|--notes)(?:=|\s+)\"((?:\\\"|[^\"])*?)\""
 )
 BODY_EXPANSION_PATTERN = re.compile(r"\$[a-zA-Z_]|\$\{|\$\(")
 
