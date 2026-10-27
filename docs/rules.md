@@ -113,8 +113,8 @@ This catalog provides detailed specifications for all 19 rules implemented in **
 - **Auto-Fix:** Synchronizes closing fence characters and lengths to match the opening fence.
 
 ### GFM-S01: `unsafe-shell-expansion`
-- **Issue:** Passing markdown bodies with double quotes (`-b "..."` or `--body "..."`) in `gh pr comment` / `gh issue comment` commands in bash scripts or CI workflows exposes LaTeX `$x$` expressions to unintended shell variable expansion.
-- **Remediation:** Use stdin streaming: `gh pr comment --body-file - < report.md`.
+- **Issue:** Passing markdown bodies with double quotes (`-b "..."` or `--body "..."` / `--notes "..."`) in `gh pr comment`, `gh issue comment`, `gh release create`, `gh issue create`, or `gh pr create` commands in bash scripts or CI workflows exposes LaTeX `$x$` expressions and math variables to unintended shell variable expansion and subshell execution (`$(...)`).
+- **Remediation:** Use stdin streaming or single-quoted heredocs: `gh issue create --body-file - < report.md` or `gh pr create --body-file - << 'EOF'`.
 
 ### GFM-I01: `image-avif-format`
 - **Issue:** Uncompressed PNG/JPEG assets increase repository bloat and slow down page loads.
