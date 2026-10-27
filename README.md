@@ -170,7 +170,7 @@ Add `gfm-math-lint` to your `.pre-commit-config.yaml` to enforce valid equations
 ```yaml
 repos:
   - repo: https://github.com/jacobhammond/gfm-math-lint
-    rev: v0.1.1
+    rev: v0.1.2
     hooks:
       # Validates math, table, code fence, and boundary issues
       - id: gfm-math-lint
