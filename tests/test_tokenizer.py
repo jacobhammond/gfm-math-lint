@@ -88,9 +88,22 @@ def test_multiline_comment_zones() -> None:
     assert zones[0].start_line == 1
     assert zones[0].end_line == 3
 
+    # Test HTML5 comment end bang state (--!>)
+    lines_bang = [
+        "<!--\n",
+        "This is a comment ending with bang\n",
+        "--!>\n",
+        "Prose\n",
+    ]
+    zones_bang = scan_document_zones(lines_bang)
+    assert zones_bang[0].zone_type == Zone.COMMENT
+    assert zones_bang[0].is_closed is True
+    assert zones_bang[0].start_line == 1
+    assert zones_bang[0].end_line == 3
+
 
 def test_scan_inline_spans() -> None:
-    line = "Here is $`x^2`$ and `code` and $y + 1$ and <!-- inline comment --> prose."
+    line = "Here is $`x^2`$ and `code` and $y + 1$ and <!-- inline comment --> and <!-- bang comment --!> prose."
     spans = scan_inline_spans(line, line_no=1)
 
     types = [s.zone_type for s in spans]
@@ -111,9 +124,11 @@ def test_scan_inline_spans() -> None:
     math_span = next(s for s in spans if s.delimiter == "$")
     assert math_span.content == "y + 1"
 
-    # Check comment span
-    comm = next(s for s in spans if s.zone_type == Zone.COMMENT)
-    assert comm.content == "inline comment"
+    # Check comment spans (both standard --> and bang --!>)
+    comments = [s for s in spans if s.zone_type == Zone.COMMENT]
+    assert len(comments) == 2
+    assert comments[0].content == "inline comment"
+    assert comments[1].content == "bang comment"
 
 
 def test_is_table_delimiter_row() -> None:

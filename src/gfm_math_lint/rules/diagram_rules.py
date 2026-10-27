@@ -7,9 +7,9 @@ import re
 from gfm_math_lint.rules.base import Rule, Violation
 from gfm_math_lint.tokenizer import DocumentZone, Zone
 
-MERMAID_SUBGRAPH_ARROW_RE = re.compile(r"^subgraph\s+.*?(?:-->|---|==>|-\.->)")
+MERMAID_SUBGRAPH_ARROW_RE = re.compile(r"^subgraph\s+.*?(?:--!?>|---|==>|-\.->)")
 MERMAID_LINK_RE = re.compile(
-    r"(?:\s+--\s+[^-]+?\s+-->|\s+-\.\s+[^\.]+?\s+\.->|\s+==\s+[^=]+?\s+==>|-->\|[^|]+\||-->|---|==>|-\.->)"
+    r"(?:\s+--\s+[^-]+?\s+--!?>|\s+-\.\s+[^\.]+?\s+\.->|\s+==\s+[^=]+?\s+==>|--!?>\|[^|]+\||--!?>|---|==>|-\.->)"
 )
 
 

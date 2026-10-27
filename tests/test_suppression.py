@@ -66,3 +66,10 @@ def test_next_line_suppression_does_not_leak_to_subsequent_lines() -> None:
     assert len(res.violations) == 1
     assert res.violations[0].line == 3
     assert res.violations[0].rule_id == "GFM-M03"
+
+
+def test_bang_comment_suppression() -> None:
+    content = "<!-- gfm-math-lint-disable-next-line GFM-T01 --!>\n| Norm | $||x|| < 1e-9$ |\n"
+    linter = Linter()
+    res = linter.lint_string(content)
+    assert len(res.violations) == 0

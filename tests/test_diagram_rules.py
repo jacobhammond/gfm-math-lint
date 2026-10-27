@@ -32,3 +32,18 @@ def test_rule_d02_unclosed_fence() -> None:
     violations = rule.check(lines, zones)
     assert len(violations) == 1
     assert violations[0].rule_id == "GFM-D02"
+
+
+def test_rule_d01_mermaid_bang_arrow() -> None:
+    rule = RuleD01()
+    good = '```mermaid\ngraph TD\n    A["Node A"] --!> B["Node B"]\n```\n'
+    lines = good.splitlines(keepends=True)
+    zones = scan_document_zones(lines)
+    assert len(rule.check(lines, zones)) == 0
+
+    bad = "```mermaid\ngraph TD\n    Node A --!> Node B\n```\n"
+    lines = bad.splitlines(keepends=True)
+    zones = scan_document_zones(lines)
+    violations = rule.check(lines, zones)
+    assert len(violations) == 1
+    assert "Node A" in violations[0].message

@@ -11,9 +11,9 @@ from gfm_math_lint.fixer import LintEdit, apply_edits, generate_unified_diff
 from gfm_math_lint.rules import ALL_MARKDOWN_RULES, Rule, Violation
 from gfm_math_lint.tokenizer import DocumentZone, Zone, scan_document_zones
 
-BLOCK_DISABLE_RE = re.compile(r"<!--\s*gfm-math-lint-disable(?!\s*-next-line)(?:\s+(.*?))?\s*-->")
-BLOCK_ENABLE_RE = re.compile(r"<!--\s*gfm-math-lint-enable(?:\s+(.*?))?\s*-->")
-NEXT_LINE_DISABLE_RE = re.compile(r"<!--\s*gfm-math-lint-disable-next-line(?:\s+(.*?))?\s*-->")
+BLOCK_DISABLE_RE = re.compile(r"<!--\s*gfm-math-lint-disable(?!\s*-next-line)(?:\s+(.*?))?\s*--!?>")
+BLOCK_ENABLE_RE = re.compile(r"<!--\s*gfm-math-lint-enable(?:\s+(.*?))?\s*--!?>")
+NEXT_LINE_DISABLE_RE = re.compile(r"<!--\s*gfm-math-lint-disable-next-line(?:\s+(.*?))?\s*--!?>")
 
 
 @dataclass
