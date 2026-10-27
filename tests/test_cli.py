@@ -137,8 +137,8 @@ def test_comment_preview_success(
     comment_file.write_text("# Heading\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "gfm_math_lint.cli.post_comment",
-        lambda **kwargs: {"status": "preview", "rendered_html": "<h1>Heading</h1>"},
+        "gfm_math_lint.cli.preview_markdown",
+        lambda *args, **kwargs: "<h1>Heading</h1>\n",
     )
 
     ret = main(["comment", "--preview", "--file", str(comment_file)])
@@ -249,3 +249,56 @@ def test_cli_verify_raw_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str])
         captured = capsys.readouterr()
         assert captured.out.strip() == clean_html.strip()
         assert "Auditing 1 file(s)" in captured.err
+
+
+def test_cli_comment_create_issue(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from unittest.mock import patch
+
+    doc = tmp_path / "issue.md"
+    doc.write_text("Issue content with $x_1$\n", encoding="utf-8")
+
+    with patch(
+        "gfm_math_lint.cli.create_issue",
+        return_value={"status": "created", "url": "https://github.com/org/repo/issues/42"},
+    ):
+        ret = main(["comment", "--create-issue", "--title", "Test Issue", "--file", str(doc)])
+        assert ret == 0
+        captured = capsys.readouterr()
+        assert "Successfully created issue: https://github.com/org/repo/issues/42" in captured.out
+
+
+def test_cli_post_alias_create_pr(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from unittest.mock import patch
+
+    doc = tmp_path / "pr.md"
+    doc.write_text("PR content\n", encoding="utf-8")
+
+    with patch(
+        "gfm_math_lint.cli.create_pr",
+        return_value={"status": "created", "url": "https://github.com/org/repo/pull/43"},
+    ):
+        ret = main(["post", "--create-pr", "--title", "Test PR", "--file", str(doc), "--base", "main"])
+        assert ret == 0
+        captured = capsys.readouterr()
+        assert "Successfully created pull request: https://github.com/org/repo/pull/43" in captured.out
+
+
+def test_cli_comment_missing_action(capsys: pytest.CaptureFixture[str]) -> None:
+    ret = main(["comment", "--title", "No action"])
+    assert ret == 2
+    captured = capsys.readouterr()
+    assert "Either --pr, --issue, --create-issue, --create-pr, or --preview must be specified" in captured.err
+
+
+def test_cli_comment_missing_title(capsys: pytest.CaptureFixture[str]) -> None:
+    ret = main(["comment", "--create-issue"])
+    assert ret == 2
+    captured = capsys.readouterr()
+    assert "--title is required when using --create-issue" in captured.err
+
+
+def test_cli_comment_conflicting_modes(capsys: pytest.CaptureFixture[str]) -> None:
+    ret = main(["comment", "--create-issue", "--create-pr", "--title", "Both"])
+    assert ret == 2
+    captured = capsys.readouterr()
+    assert "Conflicting target action modes" in captured.err

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Buffered Block Container Traversal**: `GFMHTMLValidator` buffers text data across inline tag boundaries inside block containers (`<p>`, `<li>`, `<td>`, `<blockquote>`) to catch unrendered math delimiters split across formatting tags like `<em>` and `<strong>`.
 - **MathML Pseudo-Code Stacking Detection**: Added heuristic scanner inside `<math-renderer>` elements to detect programming function composition placed in math delimiters, emitting `pseudo-code-stacking` verification warnings for formulas that cause vertical character stacking in environments without KaTeX CSS.
 - **GFM-S01 Shell Scanner Expansion**: Extended `RuleS01` (`unsafe-shell-expansion`) to scan `gh issue create` and `gh pr create` commands alongside existing comment and release commands, preventing LaTeX corruption from shell parameter expansions.
+- **Safe GitHub Issue & PR Creation**: Added `--create-issue` and `--create-pr` workflows to `gfm-math-lint comment` (with `post` CLI alias) supporting metadata options (`--title`, `--label`, `--assignee`, `--milestone`, `--base`, `--head`), streaming markdown content via stdin to prevent LaTeX corruption.
+- **Headless HTTP REST API Fallback**: Added standard library `urllib.request` fallback in `comment.py` (`preview_markdown`, `create_issue`, `create_pr`) using `$GITHUB_TOKEN` or `$GH_TOKEN` when the `gh` CLI is absent.
 
 ### Security
 - Support HTML5 comment end bang state (`--!>`) across tokenizer and diagram rules, remediating CodeQL alerts #1 and #2 (`py/bad-tag-filter`).
