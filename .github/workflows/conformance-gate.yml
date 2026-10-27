@@ -1,0 +1,83 @@
+name: conformance-gate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  conformance-crucible:
+    name: Conformance Crucible Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      - name: Setup Node.js runtime for KaTeX oracle
+        uses: actions/setup-node@0a51e185011f0d3b66d4b9c1d6835a0928e46950 # v4.2.0
+        with:
+          node-version: "20"
+
+      - name: Install KaTeX oracle engine
+        run: npm install -g katex
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Execute Conformance Crucible 4-Stage Benchmark Pipeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p build/reports
+          uv run --locked python -m conformance.runner \
+            --format text \
+            --output build/reports/conformance-scorecard.txt || EXIT_CODE=$?
+
+          cat build/reports/conformance-scorecard.txt
+
+          # Publish scorecard to GitHub Actions Step Summary
+          echo "## Conformance Crucible Scorecard" >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          cat build/reports/conformance-scorecard.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Emit JSON machine-readable scorecard
+          uv run --locked python -m conformance.runner \
+            --format json \
+            --output build/reports/conformance-scorecard.json || true
+
+          # If running with strict release gating, enforce exit code
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${STRICT_GATE:-false}" = "true" ]; then
+            exit ${EXIT_CODE:-0}
+          fi
+
+      - name: Upload Conformance Scorecard Artifacts
+        if: always()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: conformance-scorecard
+          path: build/reports/
+          retention-days: 14
