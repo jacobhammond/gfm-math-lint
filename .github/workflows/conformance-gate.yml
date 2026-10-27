@@ -37,7 +37,7 @@ jobs:
           python-version: "3.11"
 
       - name: Setup Node.js runtime for KaTeX oracle
-        uses: actions/setup-node@0a51e185011f0d3b66d4b9c1d6835a0928e46950 # v4.2.0
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: "20"
 
