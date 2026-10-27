@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-26
+
 ### Added
 - **Stdin Input (`-`) Support in `verify`**: Added ability to verify piped markdown streams via standard input (`cat doc.md | gfm-math-lint verify -` or `git show HEAD:README.md | gfm-math-lint verify -`).
 - **Raw HTML Streaming (`--stdout` / `--raw`)**: Added `--stdout` flag (with alias `--raw`) to stream rendered HTML directly to stdout while cleanly routing diagnostic logs and audit reports to stderr.
@@ -15,9 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GFM-S01 Shell Scanner Expansion**: Extended `RuleS01` (`unsafe-shell-expansion`) to scan `gh issue create` and `gh pr create` commands alongside existing comment and release commands, preventing LaTeX corruption from shell parameter expansions.
 - **Safe GitHub Issue & PR Creation**: Added `--create-issue` and `--create-pr` workflows to `gfm-math-lint comment` (with `post` CLI alias) supporting metadata options (`--title`, `--label`, `--assignee`, `--milestone`, `--base`, `--head`), streaming markdown content via stdin to prevent LaTeX corruption.
 - **Headless HTTP REST API Fallback**: Added standard library `urllib.request` fallback in `comment.py` (`preview_markdown`, `create_issue`, `create_pr`) using `$GITHUB_TOKEN` or `$GH_TOKEN` when the `gh` CLI is absent.
+- **Conformance Crucible Benchmark Pipeline**: Added 4-stage validation runner (`conformance.runner`) testing formula detection completeness, fix convergence, KaTeX AST validity, and GitHub API HTML rendering.
+- **Combinatorial Conformance Matrix**: Added 145-scenario test corpus across nested lists, blockquotes, tables, diagrams, and math constructs with synthetic generator (`scripts/generate_conformance_matrix.py`) and manifest.
+- **CI Conformance Gate Workflow**: Integrated automated Conformance Crucible gating workflow in `.github/workflows/conformance-gate.yml`.
 
 ### Security
 - Support HTML5 comment end bang state (`--!>`) across tokenizer and diagram rules, remediating CodeQL alerts #1 and #2 (`py/bad-tag-filter`).
+
 ## [0.1.1] - 2026-09-30
 
 ### Fixed
@@ -27,5 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
+[0.1.2]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jacobhammond/gfm-math-lint/releases/tag/v0.1.0

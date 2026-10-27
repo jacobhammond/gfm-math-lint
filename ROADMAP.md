@@ -524,7 +524,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    P0["Track 0: Conformance<br/>Crucible Benchmark Corpus"] --> P1["Phase 1: v0.1.2<br/>CLI Contract & Fixer Bugs"]
+    P0["Track 0: Conformance<br/>Crucible Benchmark Corpus<br/><b>[COMPLETED]</b>"] --> P1["Phase 1: v0.1.2<br/>CLI Contract & Fixer Bugs<br/><b>[COMPLETED]</b>"]
     P1 --> P2["Phase 2: v0.2.0<br/>Dual-Engine Rules & Mermaid"]
     P2 --> P3["Phase 3: v0.3.0<br/>Local KaTeX Pre-Flight"]
     P3 --> P4["Phase 4: v0.4.0<br/>Hierarchical Tokenizer"]
@@ -533,96 +533,63 @@ flowchart LR
 
 ---
 
-### Track 0: Conformance Benchmark Infrastructure (Foundational)
-**Goal:** Establish the objective gating harness before and alongside functional rule refactors.
+### Track 0: Conformance Benchmark Infrastructure (Foundational) — **[COMPLETED]**
+**Goal:** Establish the objective gating harness before and alongside functional rule refactors.  
+**Status:** **COMPLETED** (Merged into `main` via PRs #16, #17, #18).
 
-#### PR 0.1: Conformance Test Suite & Runner (`conformance/`)
-* **Files:** `conformance/runner.py`, `conformance/corpus/manifest.yaml`, `.agentignore`
+#### PR 0.1: Conformance Test Suite & Runner (`conformance/`) — **[MERGED #16]**
+* **Files:** `conformance/runner.py`, `conformance/extractor.py`, `conformance/oracles/`, `.agentignore`
 * **Features:**
   - Standalone runner executable via `uv run python -m conformance.runner`.
   - Implements the 4-Stage Crucible Pipeline (Detection $\to$ Fix Convergence $\to$ KaTeX $\to$ GitHub API) integrating **Blueprint 1** and **Blueprint 2**.
-  - Adds `.agentignore` obscuring `conformance/corpus/` from agent crawling to prevent overfitting.
-  - Emits machine-readable and human-readable scorecards:
-    ```text
-    ================ Conformance Crucible Scorecard ================
-    Scenarios Tested: 145
-    Detection Rate:   145/145 (100.0%)
-    Fix Convergence:  145/145 (100.0%)
-    KaTeX AST Passes: 145/145 (100.0%)
-    GitHub API HTML:  145/145 (100.0%)
-    Final Score:      100.0% [GATING PASS]
-    ================================================================
-    ```
+  - Adds `.agentignore` and `.cursorignore` obscuring `conformance/corpus/` from agent crawling to prevent overfitting.
+  - Emits machine-readable and human-readable scorecards with opaque failure reporting.
 
-#### PR 0.2: Synthetic Combinatorial Matrix Generator
-* **Files:** `scripts/generate_conformance_matrix.py`
+#### PR 0.2: Synthetic Combinatorial Matrix Generator — **[MERGED #17]**
+* **Files:** `scripts/generate_conformance_matrix.py`, `conformance/corpus/`
 * **Features:**
-  - Integrates **Blueprint 3** to programmatically generate complex multi-feature markdown torture scenarios crossing orthogonal axes:
+  - Programmatically generates complex multi-feature markdown torture scenarios crossing orthogonal axes:
     - **Containers:** Root prose, 1-level bullet list, 2-level nested ordered list, blockquote, table cell, blockquote inside list.
     - **Math Constructs:** Single subscript (`$P_a$`), dual subscript (`$P_a$` and `$P_b$`), logarithmic index (`$\log_2(X)$`), multi-line display math, fractional ratio (`$\frac{A}{B}$`), register identifier (`sensor_out`).
     - **Delimiters:** Inline dollar (`$`), display dollar (`$$`), code fence (````math````), backtick math (`$ `...` $`).
     - **Diagrams:** Mermaid flowchart with `\n`, subgraph links, unquoted labels.
-  - Automatically synthesizes over 120 combinatorial test files into `conformance/corpus/synthetic/`.
+  - Automatically synthesizes 137 combinatorial test files in `conformance/corpus/synthetic/` plus 7 frozen regressions (`REG-01` to `REG-07`) and 1 real-world report (`WILD-01`), producing a 145-scenario benchmark corpus in `manifest.yaml`.
 
-#### PR 0.3: CI Release Gating Workflow (`.github/workflows/conformance-gate.yml`)
-* Runs the Conformance Crucible on all PRs targeting `main`.
-* A PR cannot be merged if any file fails any stage of the 4-Stage Crucible.
+#### PR 0.3: CI Release Gating Workflow (`.github/workflows/conformance-gate.yml`) — **[MERGED #18]**
+* Runs the Conformance Crucible on all PRs targeting `main` with pinned Node.js KaTeX oracle engine.
+* Prevents regressions across detection, fixer convergence, and AST parsing.
 
 ---
 
-### Phase 1: Immediate Bug Fixes & CLI Ergonomics (v0.1.2)
-**Goal:** Eliminate false failures, fix CLI exit codes, and stop KaTeX crashes caused by `\\_`.
+### Phase 1: Immediate Bug Fixes & CLI Ergonomics (v0.1.2) — **[COMPLETED]**
+**Goal:** Eliminate false failures, support streaming verification, expand shell scanners, and enable safe headless issue/PR creation.  
+**Status:** **COMPLETED** (Released in `v0.1.2`).
 
-#### PR 1.1: Fix CLI `fix` Exit Codes and Reporting
-* **Files:** [`src/gfm_math_lint/cli.py`](src/gfm_math_lint/cli.py), [`src/gfm_math_lint/linter.py`](src/gfm_math_lint/linter.py)
-* **Changes:**
-  - Update `LintResult` to track `fixed_violations: list[Violation]` and `unresolved_violations: list[Violation]`.
-  - In `cmd_check()`, when `args.fix` is enabled:
-    - If `len(unresolved_violations) == 0`: exit code `0`.
-    - If `len(unresolved_violations) > 0`: exit code `1`.
-  - Format stdout output to clearly distinguish `[FIXED]` items from `[UNRESOLVED]` items:
-    ```text
-    Fixed 6 violations in docs/report.md:
-      [FIXED] docs/report.md:12:15: [GFM-M12] Converted to backtick math span.
-    All violations resolved.
-    ```
-* **Tests:** [`tests/test_cli.py`](tests/test_cli.py)
+#### PR 1.3: Patch HTML Parser Blind Spot, Stdin/Stdout Streaming & MathML Stacking (Tracks Issue #9) — **[MERGED #13]**
+* **Files:** [`src/gfm_math_lint/verifier.py`](src/gfm_math_lint/verifier.py), [`src/gfm_math_lint/cli.py`](src/gfm_math_lint/cli.py), [`tests/test_verifier.py`](tests/test_verifier.py)
+* **Features:**
+  - Refactored `GFMHTMLValidator` using **Blueprint 2** to buffer character data across inline tag boundaries within block containers (`<p>`, `<li>`, `<td>`, `<blockquote>`).
+  - Added stdin streaming (`gfm-math-lint verify -`) and raw HTML output (`--stdout` / `--raw`) per Issue #9.
+  - Added MathML pseudo-code function stacking heuristics emitting `pseudo-code-stacking` verification warnings.
 
-#### PR 1.2: Eliminate KaTeX Crash in Rule [`GFM-M03`](src/gfm_math_lint/rules/math_rules.py#L320-L350)
-* **Files:** [`src/gfm_math_lint/rules/math_rules.py`](src/gfm_math_lint/rules/math_rules.py)
-* **Changes:**
-  - Remove `\\\\_` auto-replacement inside `\text{...}`.
-  - In LaTeX/KaTeX, `\\` inside `\text{}` denotes a newline.
-  - If text mode contains underscores, recommend splitting out of math or replacing with single-escaped `\_` only if supported, or flagging for `GFM-M14`.
-* **Tests:** [`tests/test_math_rules.py`](tests/test_math_rules.py)
-
-#### PR 1.3: Patch HTML Parser Blind Spot, Stdin/Stdout Streaming & Shared REST Fallback (Tracks Issue #9 & Issue #8 Part 1)
-* **Files:** [`src/gfm_math_lint/verifier.py`](src/gfm_math_lint/verifier.py), [`src/gfm_math_lint/comment.py`](src/gfm_math_lint/comment.py), [`src/gfm_math_lint/cli.py`](src/gfm_math_lint/cli.py)
-* **Changes:**
-  - Refactor `GFMHTMLValidator` using **Blueprint 2** to buffer character data across inline tag boundaries within each block container (`<p>`, `<li>`, `<td>`, `<th>`, `<blockquote>`).
-  - Add explicit detection for unrendered math delimiters outside `<math-renderer>` and `<pre><code>`:
-    ```python
-    if not self.in_math_renderer and not self.in_code_block:
-        if "$$" in data:
-            self.issues.append(VerificationIssue(
-                category="unrendered-display-math",
-                message="Unrendered '$$' display math delimiter detected in rendered HTML.",
-                snippet=data.strip()[:60],
-                file_path=self.file_path,
-            ))
-    ```
-  - Detect leaked `<em>` or `<strong>` tags inside unrendered math delimiters.
-  - Add stdin streaming (`gfm-math-lint verify -`) and raw HTML output (`--stdout` / `--raw`) per Issue #9.
-  - Add MathML vertical stacking detection for pseudo-code functions per Issue #9.
-  - Extract a shared standard library `urllib.request` GitHub API helper so `comment.py` (`preview_markdown`) has graceful degradation parity with `verifier.py` when the `gh` binary is absent (Tracks Issue #8 Part 1).
-* **Tests:** [`tests/test_verifier.py`](tests/test_verifier.py), [`tests/test_comment.py`](tests/test_comment.py)
-
-#### PR 1.4: Expand Rule [`GFM-S01`](src/gfm_math_lint/rules/shell_rules.py) for `gh issue create` and `gh pr create` (Tracks Issue #7)
+#### PR 1.4: Expand Rule [`GFM-S01`](src/gfm_math_lint/rules/shell_rules.py) for `gh issue create` and `gh pr create` (Tracks Issue #7) — **[MERGED #14]**
 * **Files:** [`src/gfm_math_lint/rules/shell_rules.py`](src/gfm_math_lint/rules/shell_rules.py), [`tests/test_shell_rules.py`](tests/test_shell_rules.py)
-* **Changes:**
-  - Update `GH_CALL_PATTERN` regex to include `issue\s+create` and `pr\s+create` alongside comment commands.
-  - Prevents automated bots and scripts from corrupting LaTeX via double-quoted body arguments.
-* **Tests:** [`tests/test_shell_rules.py`](tests/test_shell_rules.py)
+* **Features:**
+  - Extended `GH_CALL_PATTERN` regex in `RuleS01` to detect `gh issue create` and `gh pr create` commands alongside comment commands, preventing LaTeX corruption from shell expansions.
+
+#### PR 1.5: Safe GitHub Issue & PR Creation with REST API Fallback (Tracks Issue #8) — **[MERGED #15]**
+* **Files:** [`src/gfm_math_lint/comment.py`](src/gfm_math_lint/comment.py), [`src/gfm_math_lint/cli.py`](src/gfm_math_lint/cli.py), [`tests/test_comment.py`](tests/test_comment.py), [`tests/test_cli.py`](tests/test_cli.py)
+* **Features:**
+  - Added `--create-issue` and `--create-pr` options with metadata (`--title`, `--label`, `--assignee`, `--milestone`) to `comment` (aliased as `post`).
+  - Implemented headless HTTP REST API fallback using standard library `urllib.request` with `$GITHUB_TOKEN` / `$GH_TOKEN` when `gh` CLI is not installed.
+
+#### Security Hotfix: Support HTML5 Comment End Bang State (`--!>`) (CodeQL #1 & #2) — **[MERGED #19]**
+* **Files:** [`src/gfm_math_lint/tokenizer.py`](src/gfm_math_lint/tokenizer.py), [`src/gfm_math_lint/rules/diagram_rules.py`](src/gfm_math_lint/rules/diagram_rules.py), [`src/gfm_math_lint/linter.py`](src/gfm_math_lint/linter.py)
+* **Features:**
+  - Updated comment close regex to recognize HTML5 comment end bang state (`--!>`), remediating CodeQL alerts #1 and #2 (`py/bad-tag-filter`).
+
+> [!NOTE]
+> Detailed exit code differentiation (PR 1.1) and auto-replacement adjustments for `GFM-M03` inside `\text{...}` (PR 1.2) are incorporated into Phase 2 alongside the full `GFM-M14` / `GFM-M12` rule overhaul.
 
 ---
 
@@ -778,12 +745,12 @@ flowchart LR
 
 A critical part of maintaining release velocity is reconciling existing open repository issues against the overarching roadmap. The four currently open issues in the repository have been audited one-by-one:
 
-| Issue ID | Issue Title | Overlap / Contention with Roadmap | Recommended Course of Action | Roadmap Phase & PR |
+| Issue ID | Issue Title | Overlap / Contention with Roadmap | Recommended Course of Action | Status & Release |
 | :--- | :--- | :--- | :--- | :--- |
-| **#6** | `Propose 'GFM-M14' rule to detect and convert code function identities in math delimiters to inline code backticks` | **Rule ID Contention:** Issue #6 proposed `GFM-M14` for function identities (`\text{fix}(c) \equiv c`), while the harvested roadmap proposed `GFM-M14` for variable identifiers (`snake_case` in math). Both address the same root problem: code in math. | **Reconcile & Unify:** Merge both into a single cohesive rule: **`GFM-M14 (code-syntax-in-math)`**. Sub-pattern A handles function identities; Sub-pattern B handles variable identifiers. Keep Issue #6 open and cross-reference PR 2.3. | **Phase 2 (v0.2.0)**<br/>`PR 2.3` |
-| **#7** | `feat(rules): expand GFM-S01 shell scanner to cover gh issue create and gh pr create` | **Complementary Enhancement:** Low-risk, high-value 10-line regex extension to `RuleS01` in [`shell_rules.py`](src/gfm_math_lint/rules/shell_rules.py). Directly protects automation bots from shell parameter expansion bugs. | **Incorporate into Phase 1:** Keep Issue #7 open as the tracking issue for PR 1.4. Update unit tests in `tests/test_shell_rules.py`. | **Phase 1 (v0.1.2)**<br/>`PR 1.4` |
-| **#8** | `feat(cli): support safe issue and PR creation with REST API fallback in publishing workflow` | **Publishing Counterpart to #7:** Currently `comment.py` only supports commenting, not issue/PR opening, and hard-requires `gh` binary. | **Split & Stagger:** (1) Implement `urllib.request` fallback in Phase 1 as part of PR 1.3 / PR 1.1. (2) Implement `--create-issue` and `--create-pr` in Phase 5 as PR 5.3. Keep Issue #8 open. | **Phase 1 & Phase 5**<br/>`PR 1.3` & `PR 5.3` |
-| **#9** | `feat(verify): support stdin input, raw HTML streaming, and MathML stacking detection in verifier` | **Direct Alignment with Verifier Patch:** Issue #9 requests stdin (`-`), `--stdout` streaming, and MathML stacking detection in [`verifier.py`](src/gfm_math_lint/verifier.py). Directly aligns with Blueprint 2 and PR 1.3. | **Integrate into PR 1.3:** Bundle stdin streaming, `--stdout` output, and MathML stacking heuristics directly into the `BufferedGFMVerifier` refactor. Keep Issue #9 open. | **Phase 1 (v0.1.2)**<br/>`PR 1.3` |
+| **#6** | `Propose 'GFM-M14' rule to detect and convert code function identities in math delimiters to inline code backticks` | **Rule ID Contention:** Issue #6 proposed `GFM-M14` for function identities (`\text{fix}(c) \equiv c`), while the harvested roadmap proposed `GFM-M14` for variable identifiers (`snake_case` in math). Both address the same root problem: code in math. | **Reconcile & Unify:** Merge both into a single cohesive rule: **`GFM-M14 (code-syntax-in-math)`**. Sub-pattern A handles function identities; Sub-pattern B handles variable identifiers. Keep Issue #6 open and cross-reference PR 2.3. | **Open**<br/>Phase 2 (v0.2.0)<br/>`PR 2.3` |
+| **#7** | `feat(rules): expand GFM-S01 shell scanner to cover gh issue create and gh pr create` | **Complementary Enhancement:** Low-risk, high-value 10-line regex extension to `RuleS01` in [`shell_rules.py`](src/gfm_math_lint/rules/shell_rules.py). Directly protects automation bots from shell parameter expansion bugs. | **Incorporate into Phase 1:** Extended `GH_CALL_PATTERN` regex in `RuleS01` and added unit test suite. | **Closed / Merged**<br/>PR #14<br/>`v0.1.2` |
+| **#8** | `feat(cli): support safe issue and PR creation with REST API fallback in publishing workflow` | **Publishing Counterpart to #7:** Safely opens GitHub issues/PRs without shell quoting corruption, with graceful REST API fallback. | **Implemented in Full:** Added `--create-issue` and `--create-pr` options with metadata support in `comment.py`/`cli.py` and headless `urllib.request` fallback. | **Closed / Merged**<br/>PR #15<br/>`v0.1.2` |
+| **#9** | `feat(verify): support stdin input, raw HTML streaming, and MathML stacking detection in verifier` | **Direct Alignment with Verifier Patch:** Issue #9 requested stdin (`-`), `--stdout` streaming, and MathML stacking detection in [`verifier.py`](src/gfm_math_lint/verifier.py). | **Integrated into PR 1.3:** Added stdin streaming, `--stdout` output, and MathML stacking heuristics directly into the `BufferedGFMVerifier` refactor. | **Closed / Merged**<br/>PR #13<br/>`v0.1.2` |
 
 ---
 
