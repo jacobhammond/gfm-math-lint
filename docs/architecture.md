@@ -89,6 +89,8 @@ Static linting alone cannot detect subtle browser rendering quirks. The `Verifie
   - KaTeX errors (`class="katex-error"`).
   - Table fracturing (mismatched column counts across rows).
   - HTML tag collisions (e.g., `<i` or `_` emphasis corrupting math subscripts).
+  - Unrendered math delimiters split across inline tags within block containers (`<p>`, `<li>`, `<td>`, `<blockquote>`).
+  - Pseudo-code function composition in math delimiters causing MathML vertical character stacking (`category="pseudo-code-stacking"`).
 - **Authentication Resolution Order:**
   1. *Explicit Token:* `--token <TOKEN>` flag passed via CLI or Python API.
   2. *GitHub CLI:* Uses local `gh api /markdown` via stdlib `subprocess` (`shell=False`) if `gh` is authenticated.

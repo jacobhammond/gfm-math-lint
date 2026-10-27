@@ -18,7 +18,7 @@ from gfm_math_lint.linter import (
     format_violation_text,
 )
 from gfm_math_lint.rules.shell_rules import RuleS01
-from gfm_math_lint.verifier import build_preview_html, open_in_browser, verify_file
+from gfm_math_lint.verifier import build_preview_html, open_in_browser, verify_file, verify_markdown
 
 
 def get_version() -> str:
@@ -102,6 +102,13 @@ def get_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--token", help="GitHub Personal Access Token for API requests")
     verify_parser.add_argument("--html", help="Path to write rendered HTML preview document")
     verify_parser.add_argument("--browser", action="store_true", help="Open rendered preview in web browser")
+    verify_parser.add_argument(
+        "--stdout",
+        "--raw",
+        action="store_true",
+        dest="stdout",
+        help="Print API-rendered HTML directly to standard output",
+    )
     verify_parser.add_argument(
         "--format",
         choices=["text", "github"],
@@ -327,6 +334,59 @@ def cmd_comment(args: argparse.Namespace) -> int:
 
 def cmd_verify(args: argparse.Namespace) -> int:
     """Execute 'verify' subcommand."""
+    is_stdout = getattr(args, "stdout", False)
+    diag_stream = sys.stderr if is_stdout else sys.stdout
+
+    if "-" in args.paths:
+        if len(args.paths) > 1:
+            sys.stderr.write("Error: Cannot combine stdin ('-') with file paths.\n")
+            return 2
+
+        try:
+            content = sys.stdin.read()
+        except (OSError, UnicodeDecodeError) as e:
+            sys.stderr.write(f"Error reading stdin: {e}\n")
+            return 2
+
+        diag_stream.write("Auditing <stdin> against api.github.com...\n")
+
+        try:
+            rendered_html, issues = verify_markdown(
+                content,
+                file_path="<stdin>",
+                token=args.token,
+                stdout=is_stdout,
+            )
+        except Exception as e:
+            sys.stderr.write(f"Error verifying <stdin>: {e}\n")
+            return 2
+
+        for issue in issues:
+            if args.format == "github":
+                file_esc = _escape_workflow_property("<stdin>")
+                cat_esc = _escape_workflow_property(issue.category)
+                msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
+                diag_stream.write(f"::error file={file_esc},title={cat_esc}::{msg_esc}\n")
+            else:
+                diag_stream.write(f"<stdin>: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
+
+        if args.html:
+            out_path = Path(args.html)
+            full_html = build_preview_html(rendered_html, title="GFM Math Verification")
+            out_path.write_text(full_html, encoding="utf-8")
+            diag_stream.write(f"Wrote rendered HTML preview to {out_path}\n")
+
+        if args.browser:
+            opened_path = open_in_browser(rendered_html, title="GFM Math Verification")
+            diag_stream.write(f"Opened preview in browser ({opened_path})\n")
+
+        if len(issues) > 0:
+            sys.stderr.write(f"Verification failed: {len(issues)} rendering anomaly(ies) detected.\n")
+            return 1
+
+        diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")
+        return 0
+
     root_dir = Path.cwd()
     config_path = Path(args.config) if getattr(args, "config", None) else None
     try:
@@ -346,14 +406,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
         sys.stderr.write("No markdown files found to verify.\n")
         return 0
 
-    sys.stdout.write(f"Auditing {len(filtered_files)} file(s) against api.github.com...\n")
+    diag_stream.write(f"Auditing {len(filtered_files)} file(s) against api.github.com...\n")
 
     total_issues = 0
     all_html_chunks: list[str] = []
 
     for file_path in filtered_files:
         try:
-            rendered_html, issues = verify_file(file_path, token=args.token)
+            rendered_html, issues = verify_file(file_path, token=args.token, stdout=is_stdout)
         except Exception as e:
             sys.stderr.write(f"Error verifying {file_path}: {e}\n")
             return 2
@@ -365,9 +425,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 file_esc = _escape_workflow_property(str(file_path))
                 cat_esc = _escape_workflow_property(issue.category)
                 msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
-                sys.stdout.write(f"::error file={file_esc},title={cat_esc}::{msg_esc}\n")
+                diag_stream.write(f"::error file={file_esc},title={cat_esc}::{msg_esc}\n")
             else:
-                sys.stdout.write(f"{file_path}: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
+                diag_stream.write(f"{file_path}: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
 
         total_issues += len(issues)
 
@@ -377,17 +437,17 @@ def cmd_verify(args: argparse.Namespace) -> int:
         out_path = Path(args.html)
         full_html = build_preview_html(combined_html, title="GFM Math Verification")
         out_path.write_text(full_html, encoding="utf-8")
-        sys.stdout.write(f"Wrote rendered HTML preview to {out_path}\n")
+        diag_stream.write(f"Wrote rendered HTML preview to {out_path}\n")
 
     if args.browser:
         opened_path = open_in_browser(combined_html, title="GFM Math Verification")
-        sys.stdout.write(f"Opened preview in browser ({opened_path})\n")
+        diag_stream.write(f"Opened preview in browser ({opened_path})\n")
 
     if total_issues > 0:
         sys.stderr.write(f"Verification failed: {total_issues} rendering anomaly(ies) detected.\n")
         return 1
 
-    sys.stdout.write("All files verified cleanly! 0 rendering anomalies detected.\n")
+    diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")
     return 0
 
 
