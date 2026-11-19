@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from gfm_math_lint.fixer import LintEdit
 from gfm_math_lint.rules.base import Rule, Violation
 from gfm_math_lint.tokenizer import DocumentZone, Zone, scan_inline_spans
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 FENCE_INNER_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 FENCE_LINE_RE = re.compile(r"^( {0,3})(`{3,}|~{3,})(.*)$")
@@ -23,7 +27,7 @@ class RuleC01(Rule):
     description: str = "Enforce that outer code fence length is strictly greater than any enclosed inner fence"
     severity: str = "error"
 
-    def check(self, lines: list[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+    def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
         violations: list[Violation] = []
 
         for zone in zones:
@@ -100,7 +104,7 @@ class RuleC02(Rule):
     description: str = "Inline code spans containing backticks must use multi-backtick delimiters per CommonMark §6.3"
     severity: str = "error"
 
-    def check(self, lines: list[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+    def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
         violations: list[Violation] = []
 
         for zone in zones:

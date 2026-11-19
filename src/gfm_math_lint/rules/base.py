@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from gfm_math_lint.fixer import LintEdit
     from gfm_math_lint.tokenizer import DocumentZone
 
@@ -30,6 +32,6 @@ class Rule(Protocol):
     description: str
     severity: str
 
-    def check(self, lines: list[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+    def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
         """Execute rule checks against the tokenized document."""
         ...

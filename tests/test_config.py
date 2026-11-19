@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from gfm_math_lint.config import LintConfig, load_config
 
 
@@ -56,3 +58,18 @@ def test_load_config_nonexistent(tmp_path: Path) -> None:
     config = load_config(tmp_path / "nonexistent.toml", is_explicit=False)
     assert config.exclude == []
     assert config.ignore == []
+    assert config.target == "dual"
+
+
+def test_load_config_target_profile(tmp_path: Path) -> None:
+    toml_path = tmp_path / "pyproject.toml"
+    toml_path.write_text('[tool.gfm-math-lint]\ntarget = "vscode"\n', encoding="utf-8")
+    config = load_config(toml_path, is_explicit=True)
+    assert config.target == "vscode"
+
+
+def test_load_config_invalid_target_raises(tmp_path: Path) -> None:
+    toml_path = tmp_path / "pyproject.toml"
+    toml_path.write_text('[tool.gfm-math-lint]\ntarget = "pandoc"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="target"):
+        load_config(toml_path, is_explicit=False)

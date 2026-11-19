@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 from gfm_math_lint.rules.base import Rule, Violation
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from gfm_math_lint.tokenizer import DocumentZone
 
 GH_CALL_PATTERN = re.compile(
@@ -24,7 +26,7 @@ class RuleS01(Rule):
     description: str = "Scan shell scripts and workflows for unsafe double-quoted body arguments in gh CLI calls"
     severity: str = "error"
 
-    def check(self, lines: list[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+    def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
         violations: list[Violation] = []
 
         # Assemble logical lines by combining backslash continuations

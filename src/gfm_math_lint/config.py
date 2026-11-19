@@ -8,6 +8,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+VALID_TARGETS: tuple[str, ...] = ("dual", "github", "vscode")
+
 
 @dataclass
 class LintConfig:
@@ -16,9 +18,13 @@ class LintConfig:
     exclude: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
     per_file_ignores: dict[str, list[str]] = field(default_factory=dict)
+    target: str = "dual"
     config_dir: Path | None = None
 
     def __post_init__(self) -> None:
+        self.target = self.target.lower()
+        if self.target not in VALID_TARGETS:
+            raise ValueError(f"Invalid target profile '{self.target}'. Must be one of {VALID_TARGETS}")
         self._ignore_upper: set[str] = {r.upper() for r in self.ignore}
         self._per_file_upper: dict[str, set[str]] = {
             pat: {r.upper() for r in rules} for pat, rules in self.per_file_ignores.items()
@@ -104,6 +110,7 @@ def load_config(pyproject_path: Path | None = None, is_explicit: bool = False) -
     exclude = tool_section.get("exclude", [])
     ignore = tool_section.get("ignore", [])
     per_file = tool_section.get("per-file-ignores", {})
+    target = tool_section.get("target", "dual")
 
     if not isinstance(exclude, list):
         if is_explicit:
@@ -117,10 +124,13 @@ def load_config(pyproject_path: Path | None = None, is_explicit: bool = False) -
         if is_explicit:
             raise ValueError(f"'per-file-ignores' in {pyproject_path} must be a table")
         per_file = {}
+    if not isinstance(target, str) or target.lower() not in VALID_TARGETS:
+        raise ValueError(f"Invalid 'target' in {pyproject_path}: must be one of {VALID_TARGETS}")
 
     return LintConfig(
         exclude=[str(x) for x in exclude],
         ignore=[str(x) for x in ignore],
         per_file_ignores={str(k): [str(x) for x in v] for k, v in per_file.items() if isinstance(v, list)},
+        target=target.lower(),
         config_dir=pyproject_path.parent.resolve(),
     )

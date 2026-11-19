@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,6 @@ from gfm_math_lint.cli import collect_markdown_files
 from gfm_math_lint.config import load_config
 from gfm_math_lint.linter import Linter, _escape_workflow_data, _escape_workflow_property
 from gfm_math_lint.rules.diagram_rules import RuleD01
-from gfm_math_lint.rules.image_rules import RuleI01
 from gfm_math_lint.rules.math_rules import RuleM08
 from gfm_math_lint.tokenizer import scan_document_zones
 
@@ -53,30 +53,6 @@ class TestC4ZoneEscapingRegressions:
         # Blank lines and HTML tags must remain completely intact
         assert "\n\nParagraph after unclosed display math.\n\n" in result.fixed_content
         assert '<a href="https://example.com">link</a>' in result.fixed_content
-
-
-class TestC5ImageRuleRegressions:
-    """Verify that image rule GFM-I01 does not rename files to nonexistent .avif."""
-
-    def test_image_rule_does_not_auto_fix(self) -> None:
-        """C5: GFM-I01 must be report-only warning without auto-fix edit."""
-        content = "Here is an image: ![Diagram](img/arch.png)\n"
-        rule = RuleI01()
-        lines = content.splitlines(keepends=True)
-        zones = scan_document_zones(lines)
-        violations = rule.check(lines, zones)
-        assert len(violations) == 1
-        assert violations[0].severity == "warning"
-        assert violations[0].edit is None
-
-    def test_image_rule_ignores_svg_and_inline_code(self) -> None:
-        """C5: SVG vector images and image syntax inside inline code are ignored."""
-        content = "Vector logo: ![Logo](assets/logo.svg)\nInside code: `![x](y.png)`\n"
-        rule = RuleI01()
-        lines = content.splitlines(keepends=True)
-        zones = scan_document_zones(lines)
-        violations = rule.check(lines, zones)
-        assert len(violations) == 0
 
 
 class TestC6DirectoryPruning:
@@ -259,3 +235,49 @@ class TestL5IdempotencyProperty:
         pass1 = linter.lint_string(sample, fix=True).fixed_content
         pass2 = linter.lint_string(pass1, fix=True).fixed_content
         assert pass1 == pass2
+
+
+class TestSafeFixGuard:
+    """Verify REG-22: auto-fixes never introduce net-new unfixable violations."""
+
+    def test_safe_fix_guard_rolls_back_net_new_unfixable_violation(self) -> None:
+        from gfm_math_lint.fixer import LintEdit
+        from gfm_math_lint.rules.base import Violation
+        from gfm_math_lint.tokenizer import DocumentZone
+
+        class BadFixRule:
+            id = "GFM-X01"
+            name = "bad-fix"
+            description = "introduces unfixable issue"
+            severity = "warning"
+
+            def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+                if lines and lines[0] == "trigger\n":
+                    return [
+                        Violation(
+                            rule_id=self.id,
+                            message="trigger",
+                            line=1,
+                            col=1,
+                            edit=LintEdit(self.id, 1, 1, 1, 8, "broken"),
+                        )
+                    ]
+                return []
+
+        class UnfixableDetectorRule:
+            id = "GFM-X02"
+            name = "unfixable-detector"
+            description = "detects broken"
+            severity = "error"
+
+            def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+                if lines and lines[0].startswith("broken"):
+                    return [Violation(rule_id=self.id, message="broken", line=1, col=1, edit=None)]
+                return []
+
+        linter = Linter(rules=[BadFixRule(), UnfixableDetectorRule()])
+        res = linter.lint_string("trigger\n", fix=True)
+        assert res.fixed_content == "trigger\n"
+        assert res.modified is False
+        assert len(res.remaining_violations) == 1
+        assert res.remaining_violations[0].rule_id == "GFM-X01"

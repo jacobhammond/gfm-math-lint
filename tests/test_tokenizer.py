@@ -165,3 +165,67 @@ def test_inline_math_numeric_and_currency_disambiguation() -> None:
     curr_spans = scan_inline_spans(curr_line, line_no=1)
     curr_math = [s for s in curr_spans if s.zone_type == Zone.INLINE_MATH]
     assert len(curr_math) == 0
+
+
+def test_hierarchical_block_context_tracking() -> None:
+    lines = [
+        "* List step:\n",
+        "  > Note:\n",
+        "  > $$\n",
+        "  > x = 1\n",
+        "  > $$\n",
+        "\n",
+        "  ```math\n",
+        "  y = 2\n",
+        "  ```\n",
+        "\n",
+        "Root prose resets list state.\n",
+        "\n",
+        "```math\n",
+        "z = 3\n",
+        "```\n",
+    ]
+    zones = scan_document_zones(lines)
+    dm_zones = [z for z in zones if z.zone_type == Zone.DISPLAY_MATH]
+    assert len(dm_zones) == 1
+    assert dm_zones[0].is_closed is True
+    assert dm_zones[0].parent_block == "list_item"
+    assert dm_zones[0].indent_level == 2
+    assert dm_zones[0].list_marker == "*"
+
+    fence_zones = [z for z in zones if z.zone_type == Zone.FENCED_CODE]
+    assert len(fence_zones) == 2
+    assert fence_zones[0].parent_block == "list_item"
+    assert fence_zones[0].indent_level == 2
+    assert fence_zones[1].parent_block is None
+    assert fence_zones[1].indent_level == 0
+
+
+def test_emulator_escapes_flanking_and_block_interrupt() -> None:
+    from gfm_math_lint.emulator import (
+        emulate_github_math_escapes,
+        find_colliding_math_underscores,
+        has_block_interrupt,
+        is_flanking_underscore,
+    )
+
+    assert emulate_github_math_escapes(r"x\,y \{z\} \lvert w\rvert", display=False) == r"x,y {z} \lvert w\rvert"
+    assert emulate_github_math_escapes("a \\\\ b", display=True) == "a \\ b"
+    assert emulate_github_math_escapes("a \\\\\nb", display=True) == "a \\\\\nb"
+
+    assert is_flanking_underscore("a_1", 1) is False
+    assert is_flanking_underscore("P _ {x}", 2) is False
+    assert is_flanking_underscore("P_{x}", 1) is True
+
+    # Intra-word only line must not collide; flanking line must collide; code span underscore ignored
+    intra_spans = scan_inline_spans("Let $a_1 + b_2$ and $c_3$.", 1)
+    assert find_colliding_math_underscores(intra_spans) == []
+
+    code_adj_spans = scan_inline_spans("Register `SENSOR_CR1` satisfies $P_a \\ge 0.5$.", 1)
+    assert find_colliding_math_underscores(code_adj_spans) == []
+
+    flank_spans = scan_inline_spans(r"Let $P_{\text{primary}}$ and $P_{\text{secondary}}$ be powers.", 1)
+    assert len(find_colliding_math_underscores(flank_spans)) == 2
+
+    assert has_block_interrupt(["P = U\n", "+ Z\n"]) is True
+    assert has_block_interrupt(["P = U +\n", "Z\n"]) is False

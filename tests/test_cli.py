@@ -85,13 +85,16 @@ def test_check_diff(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_check_fix(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """Test check --fix modifies file in-place and passes on second run."""
+    """Test check --fix modifies file in-place, prints summary, and returns 0 when clean."""
     bad_file = tmp_path / "bad.md"
     bad_file.write_text("```math\nx = 1\n```\n", encoding="utf-8")
 
-    # First run fixes file and returns 1
+    # First run fixes all violations and exits 0
     ret1 = main(["check", "--fix", str(bad_file)])
-    assert ret1 == 1
+    assert ret1 == 0
+    captured = capsys.readouterr()
+    assert "Fixed 1 violation(s)" in captured.out
+    assert "GFM-M01" not in captured.out
 
     # Verify content was updated
     fixed_content = bad_file.read_text(encoding="utf-8")
@@ -181,14 +184,47 @@ def test_collect_markdown_files_nonexistent(capsys: pytest.CaptureFixture[str]) 
     assert "Error: Path does not exist" in captured.err
 
 
-def test_fix_subcommand(tmp_path: Path) -> None:
-    """Test 'fix' subcommand modifies file in-place."""
+def test_fix_subcommand(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Test 'fix' subcommand modifies file in-place, is idempotent (REG-21), and exits 0."""
     bad_file = tmp_path / "bad.md"
     bad_file.write_text("```math\nx = 1\n```\n", encoding="utf-8")
 
     ret = main(["fix", str(bad_file)])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert "Fixed 1 violation(s)" in captured.out
+    fixed_once = bad_file.read_text(encoding="utf-8")
+    assert "$$\nx = 1\n$$\n" in fixed_once
+
+    # REG-21: second fix run is a clean no-op and exits 0
+    ret2 = main(["fix", str(bad_file)])
+    assert ret2 == 0
+    captured2 = capsys.readouterr()
+    assert captured2.out == ""
+    assert bad_file.read_text(encoding="utf-8") == fixed_once
+
+
+def test_fix_subcommand_exits_nonzero_when_unfixable_remains(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Test 'fix' subcommand exits 1 and prints only remaining unfixable violations."""
+    doc = tmp_path / "unfixable.md"
+    doc.write_text("```math\nx = 1\n```\n\n```mermaid\ngraph TD\n    Node A --> Node B\n```\n", encoding="utf-8")
+
+    ret = main(["fix", str(doc)])
     assert ret == 1
-    assert "$$\nx = 1\n$$\n" in bad_file.read_text(encoding="utf-8")
+    captured = capsys.readouterr()
+    assert "Fixed 1 violation(s)" in captured.out
+    assert "GFM-D01" in captured.out
+    assert "GFM-M01" not in captured.out
+
+
+def test_check_target_flag(tmp_path: Path) -> None:
+    """Test 'check --target' accepts valid rendering engine profiles."""
+    clean_file = tmp_path / "clean.md"
+    clean_file.write_text("# Clean\n\n$x = 1$\n", encoding="utf-8")
+    assert main(["check", "--target", "vscode", str(clean_file)]) == 0
+    assert main(["fix", "--target", "github", str(clean_file)]) == 0
 
 
 def test_check_with_explicit_config(tmp_path: Path) -> None:
