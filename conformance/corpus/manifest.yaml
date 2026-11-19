@@ -1,6 +1,6 @@
 version: '1.0'
 description: GFM Math Lint Conformance Benchmark Corpus Manifest
-total_scenarios: 145
+total_scenarios: 156
 scenarios:
 - id: syn_001
   path: synthetic/syn_001_inline_single_subscript_inline_dollar_root_prose.md
@@ -739,7 +739,8 @@ scenarios:
   path: synthetic/syn_081_display_aligned_system_display_dollar_root_prose.md
   category: synthetic
   description: Display aligned_system with display_dollar in root_prose
-  expected_rules: []
+  expected_rules:
+  - GFM-M16
   structural_tags:
   - container:root_prose
   - construct:aligned_system
@@ -750,6 +751,7 @@ scenarios:
   description: Display aligned_system with display_dollar in bullet_list
   expected_rules:
   - GFM-M02
+  - GFM-M16
   structural_tags:
   - container:bullet_list
   - construct:aligned_system
@@ -760,6 +762,7 @@ scenarios:
   description: Display aligned_system with display_dollar in nested_ordered_list
   expected_rules:
   - GFM-M02
+  - GFM-M16
   structural_tags:
   - container:nested_ordered_list
   - construct:aligned_system
@@ -768,7 +771,8 @@ scenarios:
   path: synthetic/syn_084_display_aligned_system_display_dollar_blockquote.md
   category: synthetic
   description: Display aligned_system with display_dollar in blockquote
-  expected_rules: []
+  expected_rules:
+  - GFM-M16
   structural_tags:
   - container:blockquote
   - construct:aligned_system
@@ -779,6 +783,7 @@ scenarios:
   description: Display aligned_system with display_dollar in blockquote_in_list
   expected_rules:
   - GFM-M02
+  - GFM-M16
   structural_tags:
   - container:blockquote_in_list
   - construct:aligned_system
@@ -843,7 +848,8 @@ scenarios:
   path: synthetic/syn_092_list_math_indent_0_$$_blank_False.md
   category: synthetic
   description: List Math Indent 0 with $$
-  expected_rules: []
+  expected_rules:
+  - GFM-M02
   structural_tags:
   - container:nested_list
   - indent:0
@@ -1177,7 +1183,6 @@ scenarios:
   category: synthetic
   description: 'Edge: Table Cell with Unescaped Pipe in Math Mode'
   expected_rules:
-  - GFM-M15
   - GFM-T01
   structural_tags:
   - container:table
@@ -1260,7 +1265,8 @@ scenarios:
   path: synthetic/syn_135_edge_math_with_currency_symbol.md
   category: synthetic
   description: 'Edge: Document Mixing Prose Currency and Inline Math'
-  expected_rules: []
+  expected_rules:
+  - GFM-M10
   structural_tags:
   - construct:currency_and_math
   - delimiter:inline_dollar
@@ -1281,6 +1287,103 @@ scenarios:
   structural_tags:
   - diagram:mermaid
   - edge:quoted_newline
+- id: syn_138
+  path: synthetic/syn_138_reg_08_backslash_punct_math.md
+  category: synthetic
+  description: 'REG-08: Backslash-Punctuation Spacing and Norms'
+  expected_rules:
+  - GFM-M05
+  structural_tags:
+  - regression:reg_08
+  - delimiter:inline_dollar
+- id: syn_139
+  path: synthetic/syn_139_reg_09_display_linebreak_eol.md
+  category: synthetic
+  description: 'REG-09: Mid-Line Display Matrix Linebreak'
+  expected_rules:
+  - GFM-M16
+  structural_tags:
+  - regression:reg_09
+  - delimiter:display_dollar
+- id: syn_140
+  path: synthetic/syn_140_reg_10_display_block_start_pm.md
+  category: synthetic
+  description: 'REG-10: Display Math Line Starting With Plus or Minus'
+  expected_rules:
+  - GFM-M17
+  structural_tags:
+  - regression:reg_10
+  - delimiter:display_dollar
+- id: syn_141
+  path: synthetic/syn_141_reg_12_glued_opening_dollar.md
+  category: synthetic
+  description: 'REG-12: Glued Opening Dollar Delimiter'
+  expected_rules:
+  - GFM-M13
+  structural_tags:
+  - regression:reg_12
+  - delimiter:inline_dollar
+- id: syn_142
+  path: synthetic/syn_142_reg_13_intraword_subscripts_clean.md
+  category: synthetic
+  description: 'REG-13: Intra-Word Subscripts Clean'
+  expected_rules: []
+  structural_tags:
+  - regression:reg_13
+  - delimiter:inline_dollar
+- id: syn_143
+  path: synthetic/syn_143_reg_14_flanking_subscripts_after_braces.md
+  category: synthetic
+  description: 'REG-14: Flanking Subscripts After Braces and Parens'
+  expected_rules:
+  - GFM-M12
+  structural_tags:
+  - regression:reg_14
+  - delimiter:inline_dollar
+- id: syn_144
+  path: synthetic/syn_144_reg_15_non_ascii_micro_math.md
+  category: synthetic
+  description: 'REG-15: Non-ASCII Scientific Symbols in Math'
+  expected_rules:
+  - GFM-M18
+  structural_tags:
+  - regression:reg_15
+  - delimiter:inline_dollar
+- id: syn_145
+  path: synthetic/syn_145_reg_20_dollar_in_inline_code_clean.md
+  category: synthetic
+  description: 'REG-20: Dollar Signs Inside Inline Code'
+  expected_rules: []
+  structural_tags:
+  - regression:reg_20
+  - delimiter:inline_code
+- id: syn_146
+  path: synthetic/syn_146_reg_22_safe_fix_guard_code_fence.md
+  category: synthetic
+  description: 'REG-22: Safe-Fix Guard Preserves Unconvertible Fence'
+  expected_rules: []
+  structural_tags:
+  - regression:reg_22
+  - delimiter:code_fence
+- id: syn_147
+  path: synthetic/syn_147_reg_23_table_pipe_entities_and_norms.md
+  category: synthetic
+  description: 'REG-23: Table Math Pipe Entities and Norms'
+  expected_rules:
+  - GFM-T01
+  - GFM-M15
+  structural_tags:
+  - regression:reg_23
+  - container:table
+- id: syn_148
+  path: synthetic/syn_148_reg_24_single_escaped_percent_math.md
+  category: synthetic
+  description: 'REG-24: Single-Escaped Percent in Math'
+  expected_rules:
+  - GFM-M15
+  structural_tags:
+  - regression:reg_24
+  - delimiter:inline_dollar
 - id: reg_01
   path: regressions/reg_01_subscript_collision.md
   category: regressions

@@ -5,6 +5,10 @@ from __future__ import annotations
 import re
 from html.parser import HTMLParser
 
+from gfm_math_lint.emulator import find_colliding_math_underscores, has_block_interrupt
+from gfm_math_lint.rules.math_rules import TEXT_MACROS, find_macro_calls
+from gfm_math_lint.tokenizer import Zone, scan_document_zones, scan_inline_spans
+
 
 class BufferedGFMVerifier(HTMLParser):
     """Inspects rendered GFM HTML with cross-tag text buffering to prevent slice blindness."""
@@ -142,69 +146,128 @@ def render_gfm_offline_or_online(
         except Exception:
             pass
 
-    # 3. Offline heuristic rendering fallback
-    # Minimal standard conversion for local/offline testing without external network
-    lines = markdown_content.splitlines()
+    # 3. Offline heuristic rendering fallback powered by Block-Context Tokenizer & Emulator
+    lines = markdown_content.splitlines(keepends=True)
+    zones = scan_document_zones(lines)
     html_parts: list[str] = []
-    in_code = False
-    code_fence = ""
 
-    # Pattern for backtick math: $`...`$ (immune to emphasis collisions)
-    backtick_math_pattern = re.compile(r"\$`([^`]+)`\$")
-    # Pattern for inline math: $...$
-    inline_math_pattern = re.compile(r"(?<!\\)\$(?!\$)([^\$\n]+?)(?<!\\)\$")
+    def _render_inline_line(line_text: str, line_no: int) -> str:
+        spans = scan_inline_spans(line_text.rstrip("\r\n"), line_no)
+        colliding = find_colliding_math_underscores(
+            spans,
+            macro_ranges_fn=lambda txt: [(s, e) for _, _, _, s, e in find_macro_calls(txt, TEXT_MACROS)],
+        )
+        has_underscore_collision = bool(colliding)
+        parts: list[str] = []
+        raw_line = line_text.rstrip("\r\n")
 
-    for line in lines:
-        if line.startswith("```"):
-            if in_code and line.startswith(code_fence):
-                in_code = False
-                html_parts.append("</code></pre>")
-            else:
-                in_code = True
-                code_fence = line[:3]
-                info = line[3:].strip()
-                html_parts.append(f'<pre><code class="language-{info}">')
-            continue
-
-        if in_code:
-            html_parts.append(line)
-            continue
-
-        stripped = line.strip()
-        if stripped.startswith("$$") and stripped.endswith("$$") and len(stripped) > 2:
-            html_parts.append(f"<math-renderer>{stripped}</math-renderer>")
-        elif stripped == "$$":
-            html_parts.append("<p>$$</p>")
-        else:
-            # Check for underscore emphasis collisions: e.g. $P\_...$ vs $P_...$ and $P_...$
-            processed_line = line
-
-            # Convert backtick math to math-renderer (immune to underscore collision)
-            processed_line = backtick_math_pattern.sub(r"<math-renderer>$`\1`$</math-renderer>", processed_line)
-
-            # If unescaped underscores exist across multiple inline dollar spans:
-            # e.g. "$P_{primary}$ and $P_{secondary}$"
-            # CommonMark treats unescaped underscores as <em> delimiters
-            # If they are escaped as "\_" or inside backticks, they don't collide
-            raw_dollars = inline_math_pattern.findall(processed_line)
-            has_collision = False
-            if len(raw_dollars) >= 2:
-                # Check if multiple spans contain unescaped underscores
-                sub_count = sum(1 for d in raw_dollars if re.search(r"(?<!\\)_", d))
-                if sub_count >= 2:
-                    has_collision = True
-
-            if has_collision:
-                # GitHub CommonMark corrupts this by injecting <em> across spans
-                # Replace with simulated corrupted HTML containing <em>
-                processed_line = re.sub(
-                    r"(?<!\\)_([a-zA-Z0-9\\]+)(?<!\\)_",
-                    r"<em>\1</em>",
-                    processed_line,
+        for span in spans:
+            if span.zone_type == Zone.INLINE_CODE:
+                parts.append(f"<code>{span.content}</code>")
+            elif span.zone_type == Zone.COMMENT:
+                parts.append(span.raw)
+            elif (span.zone_type == Zone.INLINE_MATH and span.delimiter == "$`") or (
+                span.zone_type == Zone.DISPLAY_MATH and span.delimiter == "$$"
+            ):
+                parts.append(f"<math-renderer>{span.raw}</math-renderer>")
+            elif span.zone_type == Zone.INLINE_MATH and span.delimiter == "$":
+                open_idx = span.start_col - 1
+                close_idx = span.end_col - 1
+                bad_open = open_idx > 0 and (
+                    raw_line[open_idx - 1] in ("-", "\u2013", "\u2014", "/") or raw_line[open_idx - 1].isalnum()
                 )
+                bad_close = close_idx < len(raw_line) and raw_line[close_idx].isalnum()
+                if bad_open or bad_close:
+                    parts.append(span.raw)
+                elif has_underscore_collision and re.search(r"(?<!\\)_", span.content):
+                    corrupted = re.sub(r"(?<!\\)_([a-zA-Z0-9\\{}]+)(?<!\\)_", r"<em>\1</em>", span.raw)
+                    if "<em>" not in corrupted:
+                        corrupted = re.sub(r"(?<!\\)_", "<em>_</em>", span.raw, count=1)
+                    parts.append(f"<math-renderer>{corrupted}</math-renderer>")
+                else:
+                    parts.append(f"<math-renderer>{span.raw}</math-renderer>")
             else:
-                processed_line = inline_math_pattern.sub(r"<math-renderer>$\1$</math-renderer>", processed_line)
+                parts.append(span.raw)
 
-            html_parts.append(f"<p>{processed_line}</p>")
+        rendered = "".join(parts)
+        if has_underscore_collision and "<em>" not in rendered:
+            rendered = re.sub(r"(?<!\\)_([^_\n]+?)(?<!\\)_", r"<em>\1</em>", rendered)
+        return rendered
+
+    for idx, zone in enumerate(zones):
+        if zone.zone_type in (Zone.FRONTMATTER, Zone.COMMENT):
+            continue
+
+        if zone.zone_type == Zone.FENCED_CODE:
+            info = zone.info.strip()
+            inner_lines = zone.lines[1:-1] if zone.is_closed and len(zone.lines) >= 2 else zone.lines[1:]
+            inner_text = "".join(inner_lines).strip()
+            if info.lower() == "math":
+                html_parts.append(f'<math-renderer class="js-display-math">$${inner_text}$$</math-renderer>')
+            else:
+                html_parts.append(f'<pre><code class="language-{info}">\n{inner_text}\n</code></pre>')
+            continue
+
+        if zone.zone_type == Zone.DISPLAY_MATH:
+            inner_lines = zone.lines[1:-1] if zone.is_closed and len(zone.lines) >= 2 else zone.lines[1:]
+            stripped_inner = [
+                re.sub(r"^\s*(?:>\s*)+", "", ln) if zone.parent_block == "blockquote" else ln for ln in inner_lines
+            ]
+            has_internal_blank = any(ln.strip() == "" for ln in stripped_inner)
+            pad_above_ok = True
+            pad_below_ok = True
+            if zone.parent_block != "blockquote":
+                if idx > 0:
+                    prev_line = zones[idx - 1].lines[-1].strip() if zones[idx - 1].lines else ""
+                    if prev_line not in ("", "---"):
+                        pad_above_ok = False
+                if idx + 1 < len(zones):
+                    next_line = zones[idx + 1].lines[0].strip() if zones[idx + 1].lines else ""
+                    if next_line not in ("", "---"):
+                        pad_below_ok = False
+
+            valid_display = (
+                zone.is_closed
+                and zone.indent_level == 0
+                and not has_internal_blank
+                and not has_block_interrupt(stripped_inner)
+                and pad_above_ok
+                and pad_below_ok
+            )
+            if valid_display:
+                inner_tex = "".join(stripped_inner).strip()
+                html_parts.append(f'<math-renderer class="js-display-math">$${inner_tex}$$</math-renderer>')
+            else:
+                html_parts.append(f"<p>{zone.content.strip()}</p>")
+            continue
+
+        if zone.zone_type == Zone.TABLE:
+            html_parts.append("<table>")
+            for r_idx, row in enumerate(zone.lines):
+                stripped_row = row.strip()
+                if re.match(r"^\|?\s*:?-+[-:| ]*\|?$", stripped_row):
+                    continue
+                inner_row = stripped_row[1:] if stripped_row.startswith("|") else stripped_row
+                if inner_row.endswith("|") and not inner_row.endswith("\\|"):
+                    inner_row = inner_row[:-1]
+                cells = re.split(r"(?<!\\)\|", inner_row)
+                html_parts.append("<tr>")
+                for cell in cells:
+                    rendered_cell = _render_inline_line(cell.strip(), zone.start_line + r_idx)
+                    html_parts.append(f"<td>{rendered_cell}</td>")
+                html_parts.append("</tr>")
+            html_parts.append("</table>")
+            continue
+
+        if zone.zone_type == Zone.PROSE:
+            raw_prose = zone.content.rstrip("\r\n")
+            if not raw_prose.strip():
+                continue
+            if raw_prose.lstrip().startswith("#"):
+                html_parts.append(f"<h1>{_render_inline_line(raw_prose, zone.start_line)}</h1>")
+            elif zone.indent_level > 0 and re.match(r"^\s*\$\$.*\$\$\s*$", raw_prose):
+                html_parts.append(f"<p>{raw_prose.strip()}</p>")
+            else:
+                html_parts.append(f"<p>{_render_inline_line(raw_prose, zone.start_line)}</p>")
 
     return "\n".join(html_parts)

@@ -3,5 +3,5 @@
 The governing system formula:
 
 ```math
-\begin{aligned}\Delta y &\le \text{cal_lock} \\ x &= 0\end{aligned}
+\begin{aligned}\Delta y &\le \mathrm{cal} \\ x &= 0\end{aligned}
 ```

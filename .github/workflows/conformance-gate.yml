@@ -53,6 +53,7 @@ jobs:
         run: |
           mkdir -p build/reports
           uv run --locked python -m conformance.runner \
+            --strict \
             --format text \
             --output build/reports/conformance-scorecard.txt || EXIT_CODE=$?
 
@@ -70,9 +71,7 @@ jobs:
             --output build/reports/conformance-scorecard.json || true
 
           # If running with strict release gating, enforce exit code
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${STRICT_GATE:-false}" = "true" ]; then
-            exit ${EXIT_CODE:-0}
-          fi
+          exit ${EXIT_CODE:-0}
 
       - name: Upload Conformance Scorecard Artifacts
         if: always()
