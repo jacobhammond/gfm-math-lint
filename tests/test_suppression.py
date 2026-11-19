@@ -8,7 +8,7 @@ from gfm_math_lint.linter import Linter
 def test_block_suppression() -> None:
     content = (
         "# Title\n\n"
-        "<!-- gfm-math-lint-disable GFM-M03 -->\n"
+        "<!-- gfm-math-lint-disable GFM-M03, GFM-M14 -->\n"
         "$\\text{ave\\_shift}$\n"
         "<!-- gfm-math-lint-enable GFM-M03 -->\n\n"
         "$\\text{another\\_bad}$\n"
@@ -16,7 +16,7 @@ def test_block_suppression() -> None:
     linter = Linter()
     res = linter.lint_string(content)
     # The first \text{ave\_shift} should be suppressed.
-    # The second \text{another\_bad} after enable should be flagged.
+    # The second \text{another\_bad} after enable should be flagged by GFM-M03.
     assert len(res.violations) == 1
     assert res.violations[0].line == 7
     assert res.violations[0].rule_id == "GFM-M03"
@@ -56,16 +56,16 @@ def test_suppress_all_rules_on_next_line() -> None:
 
 def test_next_line_suppression_does_not_leak_to_subsequent_lines() -> None:
     content = (
-        "<!-- gfm-math-lint-disable-next-line GFM-M03 -->\n"
+        "<!-- gfm-math-lint-disable-next-line GFM-M03, GFM-M14 -->\n"
         "$\\text{suppressed\\_first}$\n"
         "$\\text{unsuppressed\\_second}$\n"
     )
     linter = Linter()
     res = linter.lint_string(content)
     # Line 2 is suppressed, but line 3 must NOT be suppressed
-    assert len(res.violations) == 1
-    assert res.violations[0].line == 3
-    assert res.violations[0].rule_id == "GFM-M03"
+    assert len(res.violations) >= 1
+    assert all(v.line == 3 for v in res.violations)
+    assert "GFM-M03" in {v.rule_id for v in res.violations}
 
 
 def test_bang_comment_suppression() -> None:

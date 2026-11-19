@@ -25,7 +25,7 @@ from gfm_math_lint import Linter, LintConfig
 linter = Linter()
 
 # Or initialize with explicit configuration
-config = LintConfig(ignore=["GFM-I01"])
+config = LintConfig(ignore=["GFM-M10"])
 linter = Linter(config=config)
 ```
 

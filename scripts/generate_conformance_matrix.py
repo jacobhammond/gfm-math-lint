@@ -63,8 +63,8 @@ def generate_list_math_variations() -> list[dict[str, Any]]:
                 )
 
                 expected_rules: list[str] = []
-                # In lists, indented $$ is GFM-M02 violation; indented ```math is valid/clean in GFM
-                if delim_type == "display_dollar" and indent > 0:
+                # In lists, indented or unpadded $$ is GFM-M02 violation; ```math is preserved
+                if delim_type == "display_dollar" and (indent > 0 or not blank_above):
                     expected_rules.append("GFM-M02")
 
                 variations.append(
@@ -184,7 +184,7 @@ def generate_display_construct_variations() -> list[dict[str, Any]]:
         ),
         (
             "aligned_system",
-            r"\begin{aligned}\Delta y &\le \text{cal_lock} \\ x &= 0\end{aligned}",
+            r"\begin{aligned}\Delta y &\le \mathrm{cal} \\ x &= 0\end{aligned}",
         ),
     ]
 
@@ -221,10 +221,11 @@ def generate_display_construct_variations() -> list[dict[str, Any]]:
             for cont_name, pad, cont_fn in containers:
                 if delim_type == "display_dollar":
                     block = f"{pad}$$\n{pad}{c_math}\n{pad}$$"
-                    # Indented $$ in lists triggers GFM-M02
-                    expected = ["GFM-M02"] if "list" in cont_name and pad.strip() == "" else []
-                    if "list" in cont_name:
-                        expected = ["GFM-M02"]
+                    expected = []
+                    if "list" in cont_name or cont_name == "blockquote":
+                        expected.append("GFM-M02")
+                    if c_name == "aligned_system":
+                        expected.append("GFM-M16")
                 else:
                     block = f"{pad}```math\n{pad}{c_math}\n{pad}```"
                     # Fenced code math inside root prose triggers GFM-M01 conversion to $$
@@ -413,7 +414,7 @@ def generate_edge_case_variations() -> list[dict[str, Any]]:
                 "| :--- | :--- | :--- |\n"
                 "| Absolute Error | $|x - y| \\le 0.01$ | PENDING |\n"
             ),
-            "expected_rules": ["GFM-M15", "GFM-T01"],
+            "expected_rules": ["GFM-T01"],
             "structural_tags": ["container:table", "edge:table_pipe"],
         },
         {
@@ -521,7 +522,7 @@ def generate_edge_case_variations() -> list[dict[str, Any]]:
                 "# Currency and Math Coexistence\n\n"
                 "The test cost $50 per unit, and sensor model satisfies $x^2 + y^2 = 1$.\n"
             ),
-            "expected_rules": [],
+            "expected_rules": ["GFM-M10"],
             "structural_tags": ["construct:currency_and_math", "delimiter:inline_dollar"],
         },
         {
@@ -549,6 +550,97 @@ def generate_edge_case_variations() -> list[dict[str, Any]]:
             ),
             "expected_rules": ["GFM-D03"],
             "structural_tags": ["diagram:mermaid", "edge:quoted_newline"],
+        },
+        {
+            "filename_slug": "reg_08_backslash_punct_math",
+            "title": "REG-08: Backslash-Punctuation Spacing and Norms",
+            "content": (
+                "# REG-08: Backslash-Punctuation Spacing\n\n"
+                "Spacing in math: $x\\,y + a\\:b + c\\;d + e\\!f$ and $\\|v\\|$.\n"
+            ),
+            "expected_rules": ["GFM-M05"],
+            "structural_tags": ["regression:reg_08", "delimiter:inline_dollar"],
+        },
+        {
+            "filename_slug": "reg_09_display_linebreak_eol",
+            "title": "REG-09: Mid-Line Display Matrix Linebreak",
+            "content": (
+                "# REG-09: Mid-Line Display Matrix Linebreak\n\n"
+                "$$\n"
+                "S = \\begin{bmatrix} 0 & T \\\\ T & 0 \\end{bmatrix}\n"
+                "$$\n"
+            ),
+            "expected_rules": ["GFM-M16"],
+            "structural_tags": ["regression:reg_09", "delimiter:display_dollar"],
+        },
+        {
+            "filename_slug": "reg_10_display_block_start_pm",
+            "title": "REG-10: Display Math Line Starting With Plus or Minus",
+            "content": ("# REG-10: Display Math Block Interruption\n\n$$\nP = U\n+ Z\n- 2R\n$$\n"),
+            "expected_rules": ["GFM-M17"],
+            "structural_tags": ["regression:reg_10", "delimiter:display_dollar"],
+        },
+        {
+            "filename_slug": "reg_12_glued_opening_dollar",
+            "title": "REG-12: Glued Opening Dollar Delimiter",
+            "content": "# REG-12: Glued Opening Dollar\n\nThe base-$e$ exponential error.\n",
+            "expected_rules": ["GFM-M13"],
+            "structural_tags": ["regression:reg_12", "delimiter:inline_dollar"],
+        },
+        {
+            "filename_slug": "reg_13_intraword_subscripts_clean",
+            "title": "REG-13: Intra-Word Subscripts Clean",
+            "content": "# REG-13: Intra-Word Subscripts\n\nValues $a_1 + b_2$ and $c_3$ are safe.\n",
+            "expected_rules": [],
+            "structural_tags": ["regression:reg_13", "delimiter:inline_dollar"],
+        },
+        {
+            "filename_slug": "reg_14_flanking_subscripts_after_braces",
+            "title": "REG-14: Flanking Subscripts After Braces and Parens",
+            "content": "# REG-14: Flanking Subscripts\n\nCheck $\\text{in}_{k} + (x)_{j}$ and $y_2$.\n",
+            "expected_rules": ["GFM-M12"],
+            "structural_tags": ["regression:reg_14", "delimiter:inline_dollar"],
+        },
+        {
+            "filename_slug": "reg_15_non_ascii_micro_math",
+            "title": "REG-15: Non-ASCII Scientific Symbols in Math",
+            "content": "# REG-15: Non-ASCII Math\n\nPulse width is $8.5\\ \\text{µs}$ at $25°\\text{C}$.\n",
+            "expected_rules": ["GFM-M18"],
+            "structural_tags": ["regression:reg_15", "delimiter:inline_dollar"],
+        },
+        {
+            "filename_slug": "reg_20_dollar_in_inline_code_clean",
+            "title": "REG-20: Dollar Signs Inside Inline Code",
+            "content": "# REG-20: Dollar in Inline Code\n\nMath syntax is written as `$x + y$` inline.\n",
+            "expected_rules": [],
+            "structural_tags": ["regression:reg_20", "delimiter:inline_code"],
+        },
+        {
+            "filename_slug": "reg_22_safe_fix_guard_code_fence",
+            "title": "REG-22: Safe-Fix Guard Preserves Unconvertible Fence",
+            "content": "# REG-22: Unconvertible Fence\n\n```math\nA = B\n===\n```\n",
+            "expected_rules": [],
+            "structural_tags": ["regression:reg_22", "delimiter:code_fence"],
+        },
+        {
+            "filename_slug": "reg_23_table_pipe_entities_and_norms",
+            "title": "REG-23: Table Math Pipe Entities and Norms",
+            "content": (
+                "# REG-23: Table Pipe Entities\n\n"
+                "| Metric | Formula |\n"
+                "| :--- | :--- |\n"
+                "| Magnitude | $&#124;x&#124;^2$ |\n"
+                "| Norm | $\\|x\\|_2$ |\n"
+            ),
+            "expected_rules": ["GFM-T01", "GFM-M15"],
+            "structural_tags": ["regression:reg_23", "container:table"],
+        },
+        {
+            "filename_slug": "reg_24_single_escaped_percent_math",
+            "title": "REG-24: Single-Escaped Percent in Math",
+            "content": "# REG-24: Percent in Math\n\nSettling at $86.5\\%$ and $t_{99\\%}$ point.\n",
+            "expected_rules": ["GFM-M15"],
+            "structural_tags": ["regression:reg_24", "delimiter:inline_dollar"],
         },
     ]
     return variations

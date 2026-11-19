@@ -332,9 +332,26 @@ class ConformanceRunner:
         # Stage 4: GitHub API Live Oracle
         # -------------------------------------------------------------
         if 4 in active_stages:
-            rendered_html = render_gfm_offline_or_online(fixed_content_1, offline=self.offline)
+            expects_html_breakdown = "html:breakdown" in scenario.get("structural_tags", [])
+            rendered_html = render_gfm_offline_or_online(
+                fixed_content_1,
+                offline=self.offline or expects_html_breakdown,
+            )
             anomalies = verify_rendered_gfm(rendered_html, file_path=str(file_path))
-            if anomalies:
+            if expects_html_breakdown:
+                if not anomalies:
+                    res.stage_4_github = False
+                    res.failures.append(
+                        StageFailure(
+                            scenario_id=s_id,
+                            stage=4,
+                            stage_name="GitHub API HTML",
+                            rule_id="",
+                            structural_description=desc,
+                            failure_detail="Expected HTML breakdown anomalies were not detected",
+                        )
+                    )
+            elif anomalies:
                 res.stage_4_github = False
                 res.failures.append(
                     StageFailure(

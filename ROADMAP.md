@@ -29,6 +29,7 @@ During an automated documentation task synthesizing a technical calibration spec
 
 #### Forensic Sequence of Breakdown (Session 1)
 
+<!-- gfm-math-lint-disable GFM-D03, GFM-D05 -->
 ```mermaid
 flowchart TD
     S1["Agent writes report with math & diagrams:<br/>\\log_2(A), \\text{sensor_out}, list math, Mermaid \\n"] --> S2["Run: gfm-math-lint check<br/>Flags Rule GFM-M12 & GFM-M01"]
@@ -41,6 +42,7 @@ flowchart TD
     S8 --> S9["Agent writes test_gh_list_math.py & bisect_diff.py<br/>Spends 60 steps manual bisection via gh api"]
     S9 --> S10["Agent manually unindents '$$' to column 0,<br/>separates code identifiers, and repairs diagrams"]
 ```
+<!-- gfm-math-lint-enable GFM-D03, GFM-D05 -->
 
 ### 1.2 Session 2 Harvest (`dual-doc-conversion-2026-11`): Dual Equation-Heavy Document Conversion
 
@@ -739,9 +741,9 @@ flowchart LR
 * **Files:** [`src/gfm_math_lint/rules/math_rules.py`](src/gfm_math_lint/rules/math_rules.py), [`src/gfm_math_lint/rules/table_rules.py`](src/gfm_math_lint/rules/table_rules.py)
 * **Design:**
   - **`GFM-M05` Generalization (`P3`, `P6`, `REG-08`):** Rename `curly-brace-escape` $\to$ `backslash-punctuation-escape`. Flag all `\` + ASCII punctuation inside `$...$` and `$$...$$` (except EOL `\\` in display math and `_` handled by `M03`/`M12`):
-    - Auto-fix `\,` $\to$ `\thinspace`, `\:` $\to$ `\medspace`, `\;` $\to$ `\thickspace`, `\!` $\to$ `\negthinspace`, `\{` $\to$ `\lbrace`, `\}` $\to$ `\rbrace`, `\|` $\to$ `\Vert`.
+    - Auto-fix `\,` $\to$ `\thinspace`, `\:` $\to$ `\medspace`, `\;` $\to$ `\thickspace`, `\!` $\to$ `\negthinspace`, `\{` $\to$ `\lbrace`, `\}` $\to$ `\rbrace`, `\|` $\to$ `\Vert` (or `\left\lVert` / `\right\rVert`).
   - **`GFM-M13` Glued Opening Delimiter (`P10`, `REG-12`):** Flag opening `$` preceded immediately by `-`, `–`, `—`, `/`, or `[a-zA-Z0-9]` (`base-$e$`, `x$y$`) and auto-fix by inserting a space (`base $e$`).
-  - **`GFM-T01` Portable Absolute Value Fix (`P4`):** Update `RuleT01` to recommend and auto-fix paired `|x|` in table cell math to `\lvert x \rvert` (and single `|` to `\vert`) instead of HTML entity `&#124;`.
+  - **`GFM-T01` Portable Absolute Value & Pipe Entity Fix (`P4`, Tracks Issue #22 Bug 1, `REG-23`):** Update `RuleT01` to never suggest `&#124;` inside math spans. Auto-fix paired `|x|` in table cell math to `\lvert x \rvert`, paired `\|x\|` or `||x||` to `\lVert x \rVert`, and single `|` to `\vert` (suggesting `\mid` for conditionals). Detect and auto-fix legacy HTML pipe entities (`&#124;`, `&#x7c;`, `&#x7C;`, `&verbar;`, `&vert;`) inside `$...$` and `$$...$$` math spans.
 
 #### PR 2.5: Display Math Structural Integrity: Reconcile [`GFM-M01`](src/gfm_math_lint/rules/math_rules.py#L100-L154)/[`GFM-M02`](src/gfm_math_lint/rules/math_rules.py#L157-L215) & Introduce `GFM-M16` and `GFM-M17`
 * **Files:** [`src/gfm_math_lint/rules/math_rules.py`](src/gfm_math_lint/rules/math_rules.py), [`tests/test_math_rules.py`](tests/test_math_rules.py)
@@ -752,11 +754,11 @@ flowchart LR
   - **New Rule `GFM-M16` (`display-linebreak-eol`, `P7`, `REG-09`):** Flags mid-line `\\` inside `$$ ... $$` (e.g. one-line `\begin{bmatrix} a \\ b \end{bmatrix}`) and auto-fixes by inserting a line break after each `\\`.
   - **New Rule `GFM-M17` (`display-line-block-start`, `P9`, `REG-10`, `REG-11`):** Uses `BLOCK_INTERRUPT_RE` from `emulator.py` to flag lines inside `$$ ... $$` that match CommonMark block openers (`+ `, `- `, `* `, `> `, `#`, `1. `, setext `===`/`---`). Auto-fixes leading `+ ` or `- ` by moving the operator to the end of the previous line (or prefixing `{}+` / `&+` in `aligned`); flags setext underlines (`===` / `---`) for restructuring.
 
-#### PR 2.6: Consolidate `GFM-M03` / `GFM-M14` (`code-syntax-in-math`, Tracks Issue #6), `GFM-M15` & `GFM-M18` (`non-ascii-in-math`)
+#### PR 2.6: Consolidate `GFM-M03` / `GFM-M14` (`code-syntax-in-math`, Tracks Issue #6), `GFM-M15` (Tracks Issue #22 Bug 2) & `GFM-M18` (`non-ascii-in-math`)
 * **Files:** [`src/gfm_math_lint/rules/math_rules.py`](src/gfm_math_lint/rules/math_rules.py)
 * **Design:**
   - **Consolidate `GFM-M03` & `GFM-M14` (`code-syntax-in-math`, `REG-04`):** Remove `\\_` injection from `GFM-M03`. Flag `snake_case` register/variable names (`\text{sensor_ref_in}`) and pseudo-code function identities (`$\text{fix}(\text{fix}(c)) \equiv \text{fix}(c)$` $\to$ `` `fix(fix(c)) == fix(c)` ``), converting standalone code identifiers in math to inline code backticks.
-  - **`GFM-M15` (`cross-engine-latex-compat`, `syn_125`–`syn_128`):** Flags Unicode dashes (`–`, `—`) and unescaped `%` inside math mode (`error`).
+  - **`GFM-M15` (`cross-engine-latex-compat`, `syn_125`–`syn_128`, `REG-24`):** Flags Unicode dashes (`–`, `—`), unescaped `%`, single-escaped `\%` in `$...$` and `$$...$$` (where CommonMark strips `\` leaving a TeX comment, auto-fixing inline spans to backtick math ``$`...\%...`$`` under `target="dual"`), and raw pipes/HTML pipe entities in table math (`syn_125`) (`error`).
   - **`GFM-M18` (`non-ascii-in-math`, `F8`, `REG-15`):** Flags non-ASCII characters inside math (`µ`, `°`, `²`, `³`, `·`, `−`, Unicode Greek) as `warning` and auto-fixes to portable LaTeX macros (`\mu`, `^\circ`, `^2`, `^3`, `\cdot`, `-`, `\alpha`, `\Delta`, etc.).
 
 #### PR 2.7: Expand Mermaid Diagram Rules: `GFM-D03`, `GFM-D04` & `GFM-D05`
@@ -765,6 +767,14 @@ flowchart LR
   - **`GFM-D03` (`mermaid-newline-linebreak`, `REG-07`):** Detects literal `\n` or `\\n` inside Mermaid node labels (unquoted and quoted) and replaces with `<br>`.
   - **`GFM-D04` (`mermaid-label-special-chars`, `REG-18`):** Flags unquoted Mermaid node labels containing `( ) [ ] { } |` and auto-fixes by wrapping in double quotes (`A["..."]`). Flags `|` inside `-->|...|` edge labels (`A -->|"U = |a|²"| B`) as an `error` requiring `-- "..." -->` or rewording.
   - **`GFM-D05` (`math-in-mermaid`, `REG-19`):** Flags `$ ... $` or LaTeX macros inside Mermaid labels (`warning`), recommending Unicode symbols (`ΔT_mode`) since GitHub's Mermaid renderer does not typeset LaTeX math.
+
+#### PR 2.8: Conformance Gate Enforcement, Rule Catalog Docs & `v0.2.0` Release
+* **Files:** [`docs/rules.md`](docs/rules.md), [`README.md`](README.md), [`CHANGELOG.md`](CHANGELOG.md), [`.github/workflows/conformance-gate.yml`](.github/workflows/conformance-gate.yml), [`pyproject.toml`](pyproject.toml), [`src/gfm_math_lint/cli.py`](src/gfm_math_lint/cli.py)
+* **Design:**
+  - Document all new and updated rules (`GFM-M01`–`GFM-M18`, `GFM-T01`, `GFM-D03`–`GFM-D05`, and removal of `GFM-I01`) in `docs/rules.md` and `README.md`.
+  - Update `CHANGELOG.md` with `v0.2.0` release notes referencing Issues #6 and #22.
+  - Enable strict gating (`--strict`) in `.github/workflows/conformance-gate.yml` once the Conformance Crucible achieves 100%.
+  - Bump version to `0.2.0` in `pyproject.toml` and `cli.py`.
 
 ---
 
@@ -838,12 +848,13 @@ A critical part of maintaining release velocity is reconciling existing reposito
 | **#7** | `feat(rules): expand GFM-S01 shell scanner to cover gh issue create and gh pr create` | **Complementary Enhancement:** Low-risk, high-value regex extension to `RuleS01` in [`shell_rules.py`](src/gfm_math_lint/rules/shell_rules.py). | **Incorporated into Phase 1:** Extended `GH_CALL_PATTERN` regex in `RuleS01` and added unit test suite. | **Closed / Merged**<br/>PR #14<br/>`v0.1.2` |
 | **#8** | `feat(cli): support safe issue and PR creation with REST API fallback in publishing workflow` | **Publishing Counterpart to #7:** Safely opens GitHub issues/PRs without shell quoting corruption, with graceful REST API fallback. | **Implemented in Full (Scope Now Frozen):** Added `--create-issue` and `--create-pr` options with metadata support in `comment.py`/`cli.py`. No further GitHub client features will be added. | **Closed / Merged**<br/>PR #15<br/>`v0.1.2` |
 | **#9** | `feat(verify): support stdin input, raw HTML streaming, and MathML stacking detection in verifier` | **Direct Alignment with Verifier Patch:** Requested stdin (`-`), `--stdout` streaming, and MathML stacking detection in [`verifier.py`](src/gfm_math_lint/verifier.py). | **Integrated into PR 1.3:** Added stdin streaming, `--stdout` output, and MathML stacking heuristics directly into `GFMHTMLValidator`. | **Closed / Merged**<br/>PR #13<br/>`v0.1.2` |
+| **#22** | `[GFM-T01] Suggesting '&#124;' inside table math breaks GitHub MathJax, and single-escaped '\%' inside math is not flagged` | **Table Pipe Entities & CommonMark `\%` Stripping:** Bug 1 exposes that HTML entities (`&#124;`) inside `$...$` are not decoded before MathJax; Bug 2 exposes CommonMark unescaping `\%` $\to$ `%` (TeX comment). | **Upgrade `GFM-T01` & Extend `GFM-M15`:** Replace `&#124;` in `RuleT01` with portable `\lvert...\rvert` / `\lVert...\rVert` / `\vert`, flag HTML pipe entities in math, and flag bare `%` / single-escaped `\%` in `$...$` and `$$...$$` via `GFM-M15`. | **Open**<br/>Phase 2 (v0.2.0)<br/>`PR 2.4` & `PR 2.6` |
 
 ---
 
-## 8. Traceability Matrix & Regression Test Specifications (`REG-01` – `REG-22`)
+## 8. Traceability Matrix & Regression Test Specifications (`REG-01` – `REG-24`)
 
-The Conformance Crucible (`conformance/corpus/regressions/`) incorporates frozen regression fixtures derived directly from both Session 1 (`REG-01`–`REG-07`) and Session 2 (`REG-08`–`REG-22`):
+The Conformance Crucible (`conformance/corpus/regressions/`) incorporates frozen regression fixtures derived directly from both Session 1 (`REG-01`–`REG-07`) and Session 2 (`REG-08`–`REG-22`), plus Issue #22 regressions (`REG-23`–`REG-24`):
 
 | Test ID | Source Session | Input Markdown Snippet | Expected Lint Diagnosis | Expected Auto-Fix / Outcome |
 | :--- | :--- | :--- | :--- | :--- |
@@ -869,6 +880,8 @@ The Conformance Crucible (`conformance/corpus/regressions/`) incorporates frozen
 | `REG-20` | Session 2 (`F12`) | Prose `` written as `$…$` inline `` | **Clean** (0 findings; `$` inside inline code span) | Unchanged. |
 | `REG-21` | Session 2 (`§9`) | Any corpus file: run `gfm-math-lint fix` twice | Second run produces empty diff (`diff == ""`) | Strictly idempotent; exits `0`. |
 | `REG-22` | Session 2 (`§9`) | `fix` on list-nested ```` ```math ```` or fence with unfixable `M17` | `GFM-M01` skips unsafe conversion | Unchanged; never introduces net-new violations. |
+| `REG-23` | Issue #22 | Table math `$&#124;x&#124;^2$` and `$\|x\|^2$` | `GFM-T01` / `GFM-M15` (pipe & entity in table math) | `$\lvert x\rvert^2$` and `$\lVert x\rVert^2$`. |
+| `REG-24` | Issue #22 | Inline math `$86.5\%$` and `$t_{99\%}$` | `GFM-M15` (single-escaped `\%` stripped to TeX comment) | ``$`86.5\%`$`` and ``$`t_{99\%}`$`` (`target="dual"`). |
 
 ---
 

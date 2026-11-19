@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-18
+
+### Added
+- **Hierarchical Block-Context Tokenizer (`ADR 0005`)**: Extended `DocumentZone` with `parent_block`, `indent_level`, and `list_marker`, plus blockquote display math (`> $$`) recognition.
+- **Zero-Dependency CommonMark Math Emulator (`emulator.py`)**: Implemented CommonMark §2.4 math backslash-punctuation unescaping, §6.2 underscore delimiter-run flanking analysis, and block-interruption detection.
+- **Target Engine Profiles (`target` / `--target`)**: Added `"dual"` (default), `"github"`, and `"vscode"` rendering profiles in `[tool.gfm-math-lint]` and CLI `check`/`fix`.
+- **Rule `GFM-M14` (`code-syntax-in-math`, closes #6)**: Detects and converts pseudo-code function identities (`$\text{fix}(\text{fix}(c)) \equiv \text{fix}(c)$`) and standalone `snake_case` identifiers in math to inline code backticks, avoiding KaTeX MathML vertical stacking artifacts.
+- **Rule `GFM-M15` (`cross-engine-latex-compat`, closes #22)**: Flags Unicode en/em-dashes, bare `%` and single-escaped `\%` in `$...$` / `$$...$$` (wrapping inline spans in GFM backtick math `` $`...\%...`$ ``), and HTML pipe entities (`&#124;`, `&#x7c;`, `&verbar;`) in math spans.
+- **Rule `GFM-M16` (`display-linebreak-eol`)**: Flags mid-line `\\` inside `$$...$$` display math (which CommonMark collapses to `\`) and inserts line breaks after `\\`.
+- **Rule `GFM-M17` (`display-line-block-start`)**: Flags interior display math lines starting with Markdown block openers (`+ `, `- `, `* `, `> `, `#`, `1. `, setext underlines) and auto-fixes leading `+ ` / `- ` with `{}+ ` / `{}- `.
+- **Rule `GFM-M18` (`non-ascii-in-math`)**: Flags and converts non-ASCII symbols (`µ`, `°`, `²`, `³`, `·`, `−`, Unicode Greek) in math to portable LaTeX macros.
+- **Mermaid Rules `GFM-D03`, `GFM-D04`, `GFM-D05`**: Replaces literal `\n` in Mermaid labels with `<br>`, quotes unquoted node labels with `() {} |`, flags internal pipes in `-->|...|` edge labels, and warns on LaTeX math inside Mermaid diagrams.
+- **Safe-Fix Guard & Post-Fix Re-Check Contract**: `Linter.lint_string(..., fix=True)` records `fixed_violations` and `remaining_violations`, rolls back unsafe edits that introduce net-new unfixable violations, and `gfm-math-lint fix` / `check --fix` exits `0` when all violations are resolved.
+
+### Changed
+- **Rule `GFM-T01` Portable Table Delimiters (closes #22)**: Replaced `&#124;` math auto-fixes (which break GitHub MathJax and KaTeX) with `\lvert ... \rvert`, `\lVert ... \rVert`, and `\vert`, and added cleanup for legacy HTML pipe entities.
+- **Rule `GFM-M01` & `GFM-M02` List Reconciliation**: `GFM-M01` preserves ```` ```math ```` fences nested inside lists and blockquotes (and skips fences with unfixable block interruptions); `GFM-M02` detects and breaks out indented/list-nested `$$` blocks to column 0.
+- **Rule `GFM-M03` Safe Fix**: Removed harmful `\\_` double-escape replacement (which crashed KaTeX); embedded text-mode underscores in equations are converted to hyphens while standalone identifiers move to inline code via `GFM-M14`.
+- **Rule `GFM-M05` Generalization (`backslash-punctuation-escape`)**: Expanded beyond braces to cover `\,` (`\thinspace`), `\:` (`\medspace`), `\;` (`\thickspace`), `\!` (`\negthinspace`), and `\|` (`\Vert` / `\left\lVert` / `\right\rVert`).
+- **Rule `GFM-M12` Flanking Precision**: Uses CommonMark §6.2 delimiter-run flanking so intra-word subscripts (`$a_1 + b_2$`) and adjacent code spans no longer false-positive.
+- **Rule `GFM-M13` Glued Opening Delimiter**: Added detection and spacing auto-fix for opening `$` glued to hyphens, dashes, slashes, or alphanumerics (`base-$e$`).
+- **Strict Conformance Crucible CI Gate**: Enforced `--strict` 100% gating across the 156-scenario Conformance Crucible in `.github/workflows/conformance-gate.yml`.
+
+### Removed
+- **Rule `GFM-I01` (`image-avif-format`)**: Removed out-of-scope AVIF image format rule (`image_rules.py` and `test_image_rules.py`).
+
 ## [0.1.2] - 2026-10-26
 
 ### Added
@@ -33,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
+[0.2.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jacobhammond/gfm-math-lint/releases/tag/v0.1.0

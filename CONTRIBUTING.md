@@ -68,7 +68,7 @@ Before submitting code, ensure that all quality gates pass:
 ## Architectural & Coding Standards
 
 1. **Zero Runtime Dependencies**: The `gfm-math-lint` runtime code under `src/` must remain pure Python 3.10+ standard library. Do not add external dependencies to `pyproject.toml` dependencies.
-2. **Reverse-Offset Edit Algebra**: All automated fixes must be performed via reverse-offset algebra (sorted descending by line number and column offset) to guarantee edit idempotency: $\text{fix}(\text{fix}(c)) \equiv \text{fix}(c)$.
+2. **Reverse-Offset Edit Algebra**: All automated fixes must be performed via reverse-offset algebra (sorted descending by line number and column offset) to guarantee edit idempotency: `fix(fix(c)) == fix(c)`.
 3. **Preserve Escape Sequences & Fixtures**: Never mutate or normalize raw escape sequences in test fixtures or rule patterns. Always verify that docstrings and error messages remain strictly project-agnostic.
 4. **8-Zone Semantic Isolation**: Rules must inspect only their designated semantic zones (e.g., math rules only examine `INLINE_MATH` or `DISPLAY_MATH`, table rules examine `TABLE`, code rules examine `FENCED_CODE`). Never inspect raw line strings without zone qualification.
 5. **Entity Handling & Preview Fidelity**: The HTML preview generator must maintain KaTeX compatibility by normalizing double-escaped entities (`&amp;gt;` $\rightarrow$ `>`) and disabling duplicate MathML clipboard output (`output: "html"`).

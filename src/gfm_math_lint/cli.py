@@ -26,7 +26,7 @@ def get_version() -> str:
     try:
         return metadata.version("gfm-math-lint")
     except metadata.PackageNotFoundError:
-        return "0.1.2"
+        return "0.2.0"
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -56,6 +56,12 @@ def get_parser() -> argparse.ArgumentParser:
         default="text",
         help="Output format (default: text)",
     )
+    check_parser.add_argument(
+        "--target",
+        choices=["dual", "github", "vscode"],
+        default=None,
+        help="Target rendering engine profile (dual, github, vscode)",
+    )
 
     # fix subcommand (shortcut for check --fix)
     fix_parser = subparsers.add_parser("fix", help="Automatically fix detected violations in-place")
@@ -66,6 +72,12 @@ def get_parser() -> argparse.ArgumentParser:
         choices=["text", "github"],
         default="text",
         help="Output format (default: text)",
+    )
+    fix_parser.add_argument(
+        "--target",
+        choices=["dual", "github", "vscode"],
+        default=None,
+        help="Target rendering engine profile (dual, github, vscode)",
     )
 
     # check-shell subcommand
@@ -217,6 +229,10 @@ def cmd_check(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Configuration error: {e}\n")
         return 2
 
+    target = getattr(args, "target", None)
+    if target is not None:
+        config.target = target
+
     linter = Linter(config=config, root_dir=root_dir)
 
     md_files, missing = collect_markdown_files(args.paths, root_dir)
@@ -247,13 +263,22 @@ def cmd_check(args: argparse.Namespace) -> int:
         if args.diff and res.diff:
             sys.stdout.write(res.diff)
 
-        for v in res.violations:
-            sys.stdout.write(format_fn(v, str(file_path)) + "\n")
+        if args.fix:
+            if res.modified and args.format == "text":
+                sys.stdout.write(f"Fixed {len(res.fixed_violations)} violation(s) in {file_path}\n")
+            for v in res.remaining_violations:
+                sys.stdout.write(format_fn(v, str(file_path)) + "\n")
+            total_violations += len(res.remaining_violations)
+        else:
+            for v in res.violations:
+                sys.stdout.write(format_fn(v, str(file_path)) + "\n")
+            total_violations += len(res.violations)
 
-        total_violations += len(res.violations)
         if res.modified:
             total_modified += 1
 
+    if args.fix:
+        return 1 if total_violations > 0 else 0
     if total_violations > 0 or total_modified > 0:
         return 1
     return 0

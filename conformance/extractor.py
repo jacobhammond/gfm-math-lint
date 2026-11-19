@@ -7,6 +7,7 @@ import re
 from gfm_math_lint.tokenizer import Zone, scan_document_zones, scan_inline_spans
 
 _DISPLAY_MATH_OPEN_CLOSE_RE = re.compile(r"^\s*\$\$\s*|\s*\$\$\s*$")
+_BQ_PREFIX_RE = re.compile(r"^\s*(?:>\s*)+")
 
 
 def extract_math_blocks(markdown_content: str) -> list[tuple[str, bool]]:
@@ -23,10 +24,10 @@ def extract_math_blocks(markdown_content: str) -> list[tuple[str, bool]]:
 
     for zone in zones:
         if zone.zone_type == Zone.DISPLAY_MATH:
-            # Strip outer $$ lines or markers
+            # Strip blockquote markers and outer $$ lines or markers
             inner_lines: list[str] = []
             for idx, line in enumerate(zone.lines):
-                line_content = line.strip()
+                line_content = _BQ_PREFIX_RE.sub("", line).strip()
                 if idx == 0 and line_content.startswith("$$"):
                     line_content = line_content[2:].strip()
                 if (idx == len(zone.lines) - 1 or len(zone.lines) == 1) and line_content.endswith("$$"):
@@ -38,10 +39,14 @@ def extract_math_blocks(markdown_content: str) -> list[tuple[str, bool]]:
                 math_blocks.append((display_content, True))
 
         elif zone.zone_type == Zone.FENCED_CODE and zone.info.strip().lower() == "math":
-            # Extract fenced math code block content (excluding fence lines)
+            # Extract fenced math code block content (excluding fence lines and blockquote prefixes)
             fence_lines = zone.lines
             content_lines = fence_lines[1:-1] if len(fence_lines) >= 2 else fence_lines
-            math_text = "".join(content_lines).strip()
+            cleaned_lines = [
+                _BQ_PREFIX_RE.sub("", ln) if (zone.parent_block == "blockquote" or ln.lstrip().startswith(">")) else ln
+                for ln in content_lines
+            ]
+            math_text = "".join(cleaned_lines).strip()
             if math_text:
                 math_blocks.append((math_text, True))
 

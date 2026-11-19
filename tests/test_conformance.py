@@ -55,6 +55,19 @@ def test_extract_math_blocks_empty() -> None:
     assert extract_math_blocks("# Just a title\nNo math here.\n") == []
 
 
+def test_extract_math_blocks_blockquote() -> None:
+    doc = """> $$
+> \\text{SNR} = 1
+> $$
+>
+> ```math
+> x + y = 1
+> ```
+"""
+    blocks = extract_math_blocks(doc)
+    assert blocks == [("\\text{SNR} = 1", True), ("x + y = 1", True)]
+
+
 def test_katex_oracle_valid() -> None:
     if not is_katex_available():
         return

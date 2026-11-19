@@ -9,6 +9,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class Zone(StrEnum):
@@ -37,6 +41,9 @@ class DocumentZone:
     fence_len: int = 0
     info: str = ""
     is_closed: bool = True
+    parent_block: str | None = None
+    indent_level: int = 0
+    list_marker: str = ""
 
 
 @dataclass(frozen=True)
@@ -58,8 +65,11 @@ FENCE_OPEN_RE = re.compile(r"^(\s*)(`{3,}|~{3,})(.*)$")
 # Regex to detect blockquote fenced code blocks
 BLOCKQUOTE_FENCE_OPEN_RE = re.compile(r"^(\s{0,3}(?:>\s*)+)(`{3,}|~{3,})(.*)$")
 
-# Regex to detect display math delimiter lines: optional whitespace, $$, optional whitespace
-DISPLAY_MATH_LINE_RE = re.compile(r"^\s*\$\$\s*$")
+# Regex to detect display math delimiter lines: optional whitespace/blockquote prefix, $$, optional whitespace
+DISPLAY_MATH_LINE_RE = re.compile(r"^\s*(?:>\s*)*\$\$\s*$")
+
+# Regex to detect list item opening lines
+LIST_ITEM_RE = re.compile(r"^(\s*)(\*|-|\+|\d+[.)])\s+")
 
 # Regex to detect HTML comment opening and closing (supports standard --> and HTML5 --!>)
 COMMENT_OPEN_RE = re.compile(r"<!--")
@@ -108,11 +118,13 @@ def is_table_row(line: str) -> bool:
     return bool("|" in s and not s.startswith("<!--") and not s.startswith(">"))
 
 
-def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
-    """Scan document lines into top-level semantic zones."""
+def scan_document_zones(lines: Sequence[str]) -> list[DocumentZone]:
+    """Scan document lines into top-level semantic zones with block-context metadata."""
     zones: list[DocumentZone] = []
     i = 0
     total = len(lines)
+    in_list = False
+    current_list_marker = ""
 
     # 1. Check Frontmatter at the very beginning of the document (supporting optional UTF-8 BOM)
     first_line_clean = lines[0].lstrip("\ufeff").strip() if total > 0 else ""
@@ -141,9 +153,14 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
     while i < total:
         line = lines[i]
 
-        # 2a. Check Blockquote Fenced Code Blocks (> ```bash)
+        # 2a. Check Blockquote Fenced Code Blocks (> ```bash or   > ```math)
         m_bq = BLOCKQUOTE_FENCE_OPEN_RE.match(line)
         if m_bq:
+            bq_prefix = m_bq.group(1)
+            bq_leading_ws = len(bq_prefix) - len(bq_prefix.lstrip(" \t"))
+            bq_parent = "list_item" if (in_list and bq_leading_ws > 0) else "blockquote"
+            bq_marker = current_list_marker if bq_parent == "list_item" else ""
+
             fence = m_bq.group(2)
             info = m_bq.group(3).strip()
             fence_char = fence[0]
@@ -177,6 +194,9 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
                     fence_len=fence_len,
                     info=info,
                     is_closed=closed,
+                    parent_block=bq_parent,
+                    indent_level=bq_leading_ws,
+                    list_marker=bq_marker,
                 )
             )
             continue
@@ -184,6 +204,10 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
         # 2b. Check Standard and List-nested Fenced Code Blocks (``` or ~~~)
         m_fence = FENCE_OPEN_RE.match(line)
         if m_fence:
+            fence_ws = len(m_fence.group(1))
+            fence_parent = "list_item" if in_list else None
+            fence_marker = current_list_marker if in_list else ""
+
             fence = m_fence.group(2)
             info = m_fence.group(3).strip()
             fence_char = fence[0]
@@ -224,6 +248,9 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
                     fence_len=fence_len,
                     info=info,
                     is_closed=closed,
+                    parent_block=fence_parent,
+                    indent_level=fence_ws,
+                    list_marker=fence_marker,
                 )
             )
             continue
@@ -232,11 +259,14 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
         prev_is_blank = (i == 0) or (lines[i - 1].strip() == "")
         if (
             prev_is_blank
+            and not in_list
             and (line.startswith("    ") or line.startswith("\t"))
             and line.strip() != ""
+            and not DISPLAY_MATH_LINE_RE.match(line)
             and not re.match(r"^\s*(?:\*|-|\+|\d+\.)\s+", line)
             and not line.lstrip().startswith(">")
         ):
+            ind_ws = len(line) - len(line.lstrip(" \t"))
             start_line = i + 1
             code_lines = [line]
             i += 1
@@ -273,6 +303,9 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
                     fence_len=0,
                     info="",
                     is_closed=True,
+                    parent_block="list_item" if in_list else None,
+                    indent_level=ind_ws,
+                    list_marker=current_list_marker if in_list else "",
                 )
             )
             continue
@@ -303,8 +336,18 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
             )
             continue
 
-        # 4. Check Standalone Display Math Blocks ($$)
+        # 4. Check Standalone Display Math Blocks ($$ or > $$)
         if DISPLAY_MATH_LINE_RE.match(line):
+            dm_ws = len(line) - len(line.lstrip(" \t"))
+            dm_is_bq = line.lstrip(" \t").startswith(">")
+            if dm_is_bq:
+                dm_parent: str | None = "list_item" if (in_list and dm_ws > 0) else "blockquote"
+            elif in_list:
+                dm_parent = "list_item"
+            else:
+                dm_parent = None
+            dm_marker = current_list_marker if dm_parent == "list_item" else ""
+
             start_line = i + 1
             math_lines = [line]
             i += 1
@@ -325,6 +368,9 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
                     end_line=i,
                     lines=math_lines,
                     is_closed=closed,
+                    parent_block=dm_parent,
+                    indent_level=dm_ws,
+                    list_marker=dm_marker,
                 )
             )
             continue
@@ -341,6 +387,11 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
                 is_table_start = True
 
         if is_table_start:
+            tbl_ws = len(line) - len(line.lstrip(" \t"))
+            tbl_parent = "list_item" if (in_list and tbl_ws > 0) else "table"
+            if tbl_ws == 0:
+                in_list = False
+                current_list_marker = ""
             start_line = i + 1
             table_lines = [line]
             i += 1
@@ -354,11 +405,44 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
                     start_line=start_line,
                     end_line=i,
                     lines=table_lines,
+                    parent_block=tbl_parent,
+                    indent_level=tbl_ws,
+                    list_marker=current_list_marker if tbl_parent == "list_item" else "",
                 )
             )
             continue
 
-        # 6. Standard Prose Line
+        # 6. Standard Prose Line (track list & blockquote state)
+        m_list = LIST_ITEM_RE.match(line)
+        prose_ws = len(line) - len(line.lstrip(" \t"))
+        if m_list:
+            in_list = True
+            current_list_marker = m_list.group(2)
+            prose_parent: str | None = "list_item"
+            prose_indent = len(m_list.group(1))
+            prose_marker = current_list_marker
+        elif line.strip() == "":
+            prose_parent = None
+            prose_indent = 0
+            prose_marker = ""
+        elif line.lstrip(" \t").startswith(">"):
+            prose_parent = "list_item" if (in_list and prose_ws > 0) else "blockquote"
+            prose_indent = prose_ws
+            prose_marker = current_list_marker if prose_parent == "list_item" else ""
+            if prose_ws == 0:
+                in_list = False
+                current_list_marker = ""
+        elif prose_ws > 0:
+            prose_parent = "list_item" if in_list else None
+            prose_indent = prose_ws
+            prose_marker = current_list_marker if in_list else ""
+        else:
+            in_list = False
+            current_list_marker = ""
+            prose_parent = None
+            prose_indent = 0
+            prose_marker = ""
+
         zones.append(
             DocumentZone(
                 zone_type=Zone.PROSE,
@@ -366,6 +450,9 @@ def scan_document_zones(lines: list[str]) -> list[DocumentZone]:
                 start_line=i + 1,
                 end_line=i + 1,
                 lines=[line],
+                parent_block=prose_parent,
+                indent_level=prose_indent,
+                list_marker=prose_marker,
             )
         )
         i += 1

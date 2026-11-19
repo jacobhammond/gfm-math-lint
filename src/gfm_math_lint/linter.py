@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 from gfm_math_lint.config import LintConfig
 from gfm_math_lint.fixer import LintEdit, apply_edits, generate_unified_diff
@@ -24,7 +29,7 @@ class SuppressionManager:
     line_states: dict[int, tuple[bool, set[str], set[str]]] = field(default_factory=dict)
 
     @classmethod
-    def parse_from_lines(cls, lines: list[str], zones: list[DocumentZone] | None = None) -> SuppressionManager:
+    def parse_from_lines(cls, lines: Sequence[str], zones: list[DocumentZone] | None = None) -> SuppressionManager:
         """Parse suppression directives across lines, ignoring fenced code blocks."""
         manager = cls()
 
@@ -118,6 +123,11 @@ class SuppressionManager:
         return any(self.is_suppressed(rule_id, line_no) for line_no in range(start_line, end_line + 1))
 
 
+@runtime_checkable
+class _TargetConfigurable(Protocol):
+    target: str
+
+
 @dataclass
 class LintResult:
     """Result of linting a file or string."""
@@ -128,6 +138,8 @@ class LintResult:
     fixed_content: str
     diff: str
     modified: bool = False
+    fixed_violations: list[Violation] = field(default_factory=list)
+    remaining_violations: list[Violation] = field(default_factory=list)
 
 
 class Linter:
@@ -143,6 +155,25 @@ class Linter:
         self.rules = rules if rules is not None else ALL_MARKDOWN_RULES
         self.root_dir = root_dir or Path.cwd()
 
+    def _collect_violations(
+        self,
+        lines: Sequence[str],
+        zones: list[DocumentZone],
+        suppression: SuppressionManager,
+        file_path: str,
+    ) -> list[Violation]:
+        """Run active rules and filter inline suppressions."""
+        raw_violations: list[Violation] = []
+        for rule in self.rules:
+            if self.config.is_rule_ignored(rule.id, file_path, self.root_dir):
+                continue
+            if isinstance(rule, _TargetConfigurable):
+                rule.target = self.config.target
+            for v in rule.check(lines, zones, file_path):
+                if not suppression.is_suppressed(v.rule_id, v.line):
+                    raw_violations.append(v)
+        return sorted(raw_violations, key=lambda v: (v.line, v.col))
+
     def lint_string(
         self,
         content: str,
@@ -154,21 +185,7 @@ class Linter:
         zones = scan_document_zones(lines)
         suppression = SuppressionManager.parse_from_lines(lines, zones)
 
-        raw_violations: list[Violation] = []
-
-        for rule in self.rules:
-            # Check if ignored by config
-            if self.config.is_rule_ignored(rule.id, file_path, self.root_dir):
-                continue
-
-            violations = rule.check(lines, zones, file_path)
-            for v in violations:
-                # Filter suppressed violations
-                if not suppression.is_suppressed(v.rule_id, v.line):
-                    raw_violations.append(v)
-
-        # Sort violations by coordinate
-        sorted_violations = sorted(raw_violations, key=lambda v: (v.line, v.col))
+        sorted_violations = self._collect_violations(lines, zones, suppression, file_path)
 
         if not fix:
             return LintResult(
@@ -178,6 +195,8 @@ class Linter:
                 fixed_content=content,
                 diff="",
                 modified=False,
+                fixed_violations=[],
+                remaining_violations=sorted_violations,
             )
 
         # Iterative fix application: resolve overlapping edits until convergence (max 5 passes)
@@ -198,17 +217,13 @@ class Linter:
             iter_lines = current_content.splitlines(keepends=True)
             iter_zones = scan_document_zones(iter_lines)
             iter_suppression = SuppressionManager.parse_from_lines(iter_lines, iter_zones)
-            iter_edits: list[LintEdit] = []
-            for rule in self.rules:
-                if self.config.is_rule_ignored(rule.id, file_path, self.root_dir):
-                    continue
-                for v in rule.check(iter_lines, iter_zones, file_path):
-                    if (
-                        v.edit is not None
-                        and not iter_suppression.is_suppressed(v.rule_id, v.line)
-                        and not iter_suppression.is_edit_suppressed(v.rule_id, v.edit.start_line, v.edit.end_line)
-                    ):
-                        iter_edits.append(v.edit)
+            iter_violations = self._collect_violations(iter_lines, iter_zones, iter_suppression, file_path)
+            iter_edits: list[LintEdit] = [
+                v.edit
+                for v in iter_violations
+                if v.edit is not None
+                and not iter_suppression.is_edit_suppressed(v.rule_id, v.edit.start_line, v.edit.end_line)
+            ]
             if not iter_edits:
                 converged = True
                 break
@@ -223,6 +238,35 @@ class Linter:
 
             warnings.warn(f"Fixes did not converge within 5 passes for {file_path}", RuntimeWarning, stacklevel=2)
 
+        post_lines = current_content.splitlines(keepends=True)
+        post_zones = scan_document_zones(post_lines)
+        post_suppression = SuppressionManager.parse_from_lines(post_lines, post_zones)
+        post_violations = self._collect_violations(post_lines, post_zones, post_suppression, file_path)
+
+        # Safe-Fix Guard (REG-22): roll back if fixing introduces a net-new unfixable violation
+        initial_rule_ids = {v.rule_id for v in sorted_violations}
+        if current_content != content and any(v.rule_id not in initial_rule_ids for v in post_violations):
+            current_content = content
+            post_violations = sorted_violations
+
+        if current_content == content:
+            fixed_violations: list[Violation] = []
+            remaining_violations = sorted_violations
+        elif not post_violations:
+            fixed_violations = list(sorted_violations)
+            remaining_violations = []
+        else:
+            rem_counts = Counter(v.rule_id for v in post_violations)
+            kept_counts: Counter[str] = Counter()
+            fixed_violations = []
+            for v in reversed(sorted_violations):
+                if kept_counts[v.rule_id] < rem_counts[v.rule_id]:
+                    kept_counts[v.rule_id] += 1
+                else:
+                    fixed_violations.append(v)
+            fixed_violations.reverse()
+            remaining_violations = post_violations
+
         diff = generate_unified_diff(content, current_content, file_path)
 
         return LintResult(
@@ -232,6 +276,8 @@ class Linter:
             fixed_content=current_content,
             diff=diff,
             modified=(current_content != content),
+            fixed_violations=fixed_violations,
+            remaining_violations=remaining_violations,
         )
 
     def lint_file(
