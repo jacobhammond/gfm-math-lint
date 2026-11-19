@@ -22,6 +22,11 @@ from gfm_math_lint.rules.math_rules import (
     RuleM11,
     RuleM12,
     RuleM13,
+    RuleM14,
+    RuleM15,
+    RuleM16,
+    RuleM17,
+    RuleM18,
 )
 from gfm_math_lint.tokenizer import scan_document_zones
 
@@ -82,14 +87,24 @@ def test_rule_m02_internal_blank_lines_and_padding_combined() -> None:
 
 def test_rule_m03_text_mode_underscore_escape() -> None:
     rule = RuleM03()
+    expected = "Here is $\\text{ave-shift} = 10$ in equation.\n"
+
     # Bad with single escaped underscore
-    bad = "Here is $\\text{ave\\_shift}$ in equation.\n"
-    expected = "Here is $\\text{ave\\\\_shift}$ in equation.\n"
+    bad = "Here is $\\text{ave\\_shift} = 10$ in equation.\n"
     assert_idempotent(rule, bad, expected)
 
     # Bad with raw underscore
-    bad_raw = "Here is $\\text{ave_shift}$ in equation.\n"
+    bad_raw = "Here is $\\text{ave_shift} = 10$ in equation.\n"
     assert_idempotent(rule, bad_raw, expected)
+
+    # Bad with legacy double-escaped underscore
+    bad_double = "Here is $\\text{ave\\\\_shift} = 10$ in equation.\n"
+    assert_idempotent(rule, bad_double, expected)
+
+    # Also catches underscores inside backtick math text macros
+    bad_bt = "Here is $`\\text{sensor_ref_in} \\ge 0.5`$ in equation.\n"
+    expected_bt = "Here is $`\\text{sensor-ref-in} \\ge 0.5`$ in equation.\n"
+    assert_idempotent(rule, bad_bt, expected_bt)
 
 
 def test_rule_m04_inline_math_whitespace() -> None:
@@ -205,13 +220,22 @@ def test_rule_m11_ignored_in_code_fence() -> None:
     assert len(violations) == 0
 
 
-def test_rule_m02_preserves_indented_list_display_math() -> None:
+def test_rule_m02_breaks_out_indented_list_display_math() -> None:
     rule = RuleM02()
-    content = "* List item:\n   $$n_g = 1$$\n"
-    lines = content.splitlines(keepends=True)
-    zones = scan_document_zones(lines)
-    violations = rule.check(lines, zones)
-    assert len(violations) == 0
+    bad = "* List item:\n   $$n_g = 1$$\n"
+    expected = "* List item:\n\n$$\nn_g = 1\n$$\n"
+    assert_idempotent(rule, bad, expected)
+
+
+def test_rule_m01_preserves_list_and_blockquote_math_fences() -> None:
+    rule = RuleM01()
+    list_fence = "* Item 1:\n  ```math\n  x = 1\n  ```\n"
+    bq_fence = "> ```math\n> x = 1\n> ```\n"
+    guard_fence = "```math\nA = B\n===\n```\n"
+    for content in (list_fence, bq_fence, guard_fence):
+        lines = content.splitlines(keepends=True)
+        zones = scan_document_zones(lines)
+        assert len(rule.check(lines, zones)) == 0
 
 
 def test_rule_m11_preserves_indented_list_display_math() -> None:
@@ -246,10 +270,23 @@ def test_rule_m12_single_underscore_no_violation() -> None:
 
 def test_rule_m12_text_macro_underscores_preserved() -> None:
     rule = RuleM12()
-    bad = r"Compare $x_0$ and $\text{my_var}$ and $y_0$." + "\n"
-    # Rule M12 escapes x_0 and y_0, but does not escape inside \text{}
-    expected = r"Compare $x\_0$ and $\text{my_var}$ and $y\_0$." + "\n"
+    bad = r"Compare $x_{0}$ and $\text{my_var}$ and $y_{0}$." + "\n"
+    # Rule M12 escapes x_{0} and y_{0}, but does not escape inside \text{}
+    expected = r"Compare $x\_{0}$ and $\text{my_var}$ and $y\_{0}$." + "\n"
     assert_idempotent(rule, bad, expected)
+
+
+def test_rule_m12_intraword_subscripts_and_vscode_target() -> None:
+    rule = RuleM12()
+    clean_intra = "Values $a_1 + b_2$ and $c_3$ are safe.\n"
+    lines = clean_intra.splitlines(keepends=True)
+    assert len(rule.check(lines, scan_document_zones(lines))) == 0
+
+    rule_vs = RuleM12()
+    rule_vs.target = "vscode"
+    bad = r"Let $P_{\text{primary}}$ and $P_{\text{secondary}}$ be powers." + "\n"
+    expected_vs = r"Let $P _ {\text{primary}}$ and $P _ {\text{secondary}}$ be powers." + "\n"
+    assert_idempotent(rule_vs, bad, expected_vs)
 
 
 def test_rule_m12_backtick_math_ignored() -> None:
@@ -293,4 +330,91 @@ def test_rule_m13_parenthesis_collision() -> None:
     rule = RuleM13()
     bad = "($A = B$ instead of $G(L)$)\n"
     expected = "($A = B$ instead of $G(L)$ )\n"
+    assert_idempotent(rule, bad, expected)
+
+
+def test_rule_m13_glued_opening_delimiter() -> None:
+    rule = RuleM13()
+    bad = "The base-$e$ error and x$y$ term.\n"
+    expected = "The base $e$ error and x $y$ term.\n"
+    assert_idempotent(rule, bad, expected)
+
+
+def test_rule_m05_backslash_punctuation_generalized() -> None:
+    rule = RuleM05()
+    bad = r"Spacing $x\,y + a\:b + c\;d + e\!f$ and $\|v\|$." + "\n"
+    expected = r"Spacing $x\thinspace y + a\medspace b + c\thickspace d + e\negthinspace f$ and $\Vert v\Vert$." + "\n"
+    assert_idempotent(rule, bad, expected)
+
+
+def test_rule_m06_ignores_closed_html_tags() -> None:
+    rule = RuleM06()
+    html_snippet = "$$\n\\text{SNR}<br><em>x</em>\n$$\n"
+    lines = html_snippet.splitlines(keepends=True)
+    assert len(rule.check(lines, scan_document_zones(lines))) == 0
+
+
+def test_rule_m14_function_identities_and_snake_case() -> None:
+    rule = RuleM14()
+    bad1 = "$\\text{fix}(\\text{fix}(c)) \\equiv \\text{fix}(c)$\n"
+    assert_idempotent(rule, bad1, "`fix(fix(c)) == fix(c)`\n")
+
+    bad2 = "$\\text{parse}(\\text{str}) == \\text{ast}$\n"
+    assert_idempotent(rule, bad2, "`parse(str) == ast`\n")
+
+    bad3 = "Register $\\text{sensor_ref_in}$ is asserted.\n"
+    assert_idempotent(rule, bad3, "Register `sensor_ref_in` is asserted.\n")
+
+    # Embedded snake_case in equation is flagged (edit=None; RuleM03 provides non-overlapping edit)
+    embedded = "Threshold $\\text{sensor_ref_in} \\ge 0.5$ holds.\n"
+    lines = embedded.splitlines(keepends=True)
+    assert len(rule.check(lines, scan_document_zones(lines))) == 1
+
+    # Valid mathematical notation must NOT be flagged
+    valid = (
+        "$f(x) = x^2 + 2x + 1$\n"
+        "$\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1$\n"
+        "$\\text{Probability}(A \\mid B) = \\frac{P(B \\mid A) P(A)}{P(B)}$\n"
+    )
+    valid_lines = valid.splitlines(keepends=True)
+    assert len(rule.check(valid_lines, scan_document_zones(valid_lines))) == 0
+
+
+def test_rule_m15_percent_and_unicode_dash() -> None:
+    rule = RuleM15()
+    bad_pct = "Settle $86.5\\%$ and $t_{99\\%}$ and $D \\le 50%$.\n"
+    expected_pct = "Settle $`86.5\\%`$ and $`t_{99\\%}`$ and $`D \\le 50\\%`$.\n"
+    assert_idempotent(rule, bad_pct, expected_pct)
+
+    bad_dash = "Range $20\u201325^\\circ\\text{C}$.\n"
+    expected_dash = "Range $20-25^\\circ\\text{C}$.\n"
+    assert_idempotent(rule, bad_dash, expected_dash)
+
+
+def test_rule_m16_display_linebreak_eol() -> None:
+    rule = RuleM16()
+    bad = "$$\nS = \\begin{bmatrix} 0 & T \\\\ T & 0 \\end{bmatrix}\n$$\n"
+    expected = "$$\nS = \\begin{bmatrix} 0 & T \\\\\nT & 0 \\end{bmatrix}\n$$\n"
+    assert_idempotent(rule, bad, expected)
+
+
+def test_rule_m17_display_block_start() -> None:
+    rule = RuleM17()
+    bad = "$$\nP = U\n+ Z\n- 2R\n$$\n"
+    expected = "$$\nP = U\n{}+ Z\n{}- 2R\n$$\n"
+    assert_idempotent(rule, bad, expected)
+
+    # REG-11: setext underline inside $$ is flagged as unfixable error
+    bad_setext = "$$\nA = B\n===\n$$\n"
+    lines = bad_setext.splitlines(keepends=True)
+    violations = rule.check(lines, scan_document_zones(lines))
+    assert len(violations) == 1
+    assert violations[0].severity == "error"
+    assert violations[0].edit is None
+
+
+def test_rule_m18_non_ascii_in_math() -> None:
+    rule = RuleM18()
+    bad = "Pulse $8.5\\ \\text{µs}$ at $25°\\text{C}$ and $α + β$.\n"
+    expected = "Pulse $8.5\\ \\mu\\text{s}$ at $25^\\circ\\text{C}$ and $\\alpha + \\beta$.\n"
     assert_idempotent(rule, bad, expected)
