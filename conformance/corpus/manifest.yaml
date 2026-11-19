@@ -580,7 +580,8 @@ scenarios:
   path: synthetic/syn_064_display_multiline_snr_display_dollar_blockquote.md
   category: synthetic
   description: Display multiline_snr with display_dollar in blockquote
-  expected_rules: []
+  expected_rules:
+  - GFM-M02
   structural_tags:
   - container:blockquote
   - construct:multiline_snr
@@ -674,7 +675,8 @@ scenarios:
   path: synthetic/syn_074_display_fractional_sum_display_dollar_blockquote.md
   category: synthetic
   description: Display fractional_sum with display_dollar in blockquote
-  expected_rules: []
+  expected_rules:
+  - GFM-M02
   structural_tags:
   - container:blockquote
   - construct:fractional_sum
@@ -772,6 +774,7 @@ scenarios:
   category: synthetic
   description: Display aligned_system with display_dollar in blockquote
   expected_rules:
+  - GFM-M02
   - GFM-M16
   structural_tags:
   - container:blockquote

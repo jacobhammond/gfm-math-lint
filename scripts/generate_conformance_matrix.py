@@ -222,7 +222,7 @@ def generate_display_construct_variations() -> list[dict[str, Any]]:
                 if delim_type == "display_dollar":
                     block = f"{pad}$$\n{pad}{c_math}\n{pad}$$"
                     expected = []
-                    if "list" in cont_name:
+                    if "list" in cont_name or cont_name == "blockquote":
                         expected.append("GFM-M02")
                     if c_name == "aligned_system":
                         expected.append("GFM-M16")

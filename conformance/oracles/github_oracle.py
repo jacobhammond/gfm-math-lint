@@ -6,7 +6,7 @@ import re
 from html.parser import HTMLParser
 
 from gfm_math_lint.emulator import find_colliding_math_underscores, has_block_interrupt
-from gfm_math_lint.rules.math_rules import TEXT_MACROS, find_macro_calls
+from gfm_math_lint.rules.math_rules import TEXT_MACROS, find_macro_calls, is_valid_display_math_pad
 from gfm_math_lint.tokenizer import Zone, scan_document_zones, scan_inline_spans
 
 
@@ -201,30 +201,41 @@ def render_gfm_offline_or_online(
         if zone.zone_type == Zone.FENCED_CODE:
             info = zone.info.strip()
             inner_lines = zone.lines[1:-1] if zone.is_closed and len(zone.lines) >= 2 else zone.lines[1:]
-            inner_text = "".join(inner_lines).strip()
             if info.lower() == "math":
+                stripped_math_lines = [
+                    re.sub(r"^\s*(?:>\s*)+", "", ln)
+                    if (zone.parent_block == "blockquote" or ln.lstrip().startswith(">"))
+                    else ln
+                    for ln in inner_lines
+                ]
+                inner_text = "".join(stripped_math_lines).strip()
                 html_parts.append(f'<math-renderer class="js-display-math">$${inner_text}$$</math-renderer>')
             else:
+                inner_text = "".join(inner_lines).strip()
                 html_parts.append(f'<pre><code class="language-{info}">\n{inner_text}\n</code></pre>')
             continue
 
         if zone.zone_type == Zone.DISPLAY_MATH:
             inner_lines = zone.lines[1:-1] if zone.is_closed and len(zone.lines) >= 2 else zone.lines[1:]
             stripped_inner = [
-                re.sub(r"^\s*(?:>\s*)+", "", ln) if zone.parent_block == "blockquote" else ln for ln in inner_lines
+                re.sub(r"^\s*(?:>\s*)+", "", ln)
+                if (zone.parent_block == "blockquote" or ln.lstrip().startswith(">"))
+                else ln
+                for ln in inner_lines
             ]
             has_internal_blank = any(ln.strip() == "" for ln in stripped_inner)
-            pad_above_ok = True
-            pad_below_ok = True
-            if zone.parent_block != "blockquote":
-                if idx > 0:
-                    prev_line = zones[idx - 1].lines[-1].strip() if zones[idx - 1].lines else ""
-                    if prev_line not in ("", "---"):
-                        pad_above_ok = False
-                if idx + 1 < len(zones):
-                    next_line = zones[idx + 1].lines[0].strip() if zones[idx + 1].lines else ""
-                    if next_line not in ("", "---"):
-                        pad_below_ok = False
+
+            is_bq = zone.parent_block == "blockquote"
+            prev_valid = (
+                idx == 0 or not zones[idx - 1].lines or is_valid_display_math_pad(zones[idx - 1].lines[-1], is_bq)
+            )
+            next_valid = (
+                idx + 1 >= len(zones)
+                or not zones[idx + 1].lines
+                or is_valid_display_math_pad(zones[idx + 1].lines[0], is_bq)
+            )
+            pad_above_ok = prev_valid
+            pad_below_ok = next_valid
 
             valid_display = (
                 zone.is_closed

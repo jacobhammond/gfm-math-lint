@@ -85,6 +85,17 @@ def test_rule_m02_internal_blank_lines_and_padding_combined() -> None:
     assert_idempotent(rule, bad, expected)
 
 
+def test_rule_m02_blockquote_display_math_padding() -> None:
+    rule = RuleM02()
+    bad = "> System bound:\n> $$\n> x = 1\n> $$\n"
+    expected = "> System bound:\n>\n> $$\n> x = 1\n> $$\n"
+    assert_idempotent(rule, bad, expected)
+
+    bad_below = "> $$\n> x = 1\n> $$\n> Continuation.\n"
+    expected_below = "> $$\n> x = 1\n> $$\n>\n> Continuation.\n"
+    assert_idempotent(rule, bad_below, expected_below)
+
+
 def test_rule_m03_text_mode_underscore_escape() -> None:
     rule = RuleM03()
     expected = "Here is $\\text{ave-shift} = 10$ in equation.\n"

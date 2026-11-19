@@ -183,6 +183,14 @@ class RuleM01(Rule):
         return violations
 
 
+def is_valid_display_math_pad(line_text: str, is_blockquote: bool = False) -> bool:
+    """Return True if an adjacent line satisfies display-math blank padding requirements."""
+    stripped = line_text.strip()
+    if stripped in ("", "---"):
+        return True
+    return bool(is_blockquote and re.match(r"^(?:>\s*)+$", stripped))
+
+
 class RuleM02(Rule):
     """GFM-M02: Block Math Boundary Isolation & Padding."""
 
@@ -303,40 +311,41 @@ class RuleM02(Rule):
             else:
                 cleaned_inner_lines = zone.lines[1:-1] if len(zone.lines) > 1 else []
 
-            # Check padding above/below (top-level blockquotes > $$ do not require blank lines outside >)
+            # Check padding above/below (blockquote > $$ requires > separator lines against adjacent quote text)
             need_pad_above = False
             need_pad_below = False
-            if not is_top_level_bq:
-                if zone.start_line > 1:
-                    line_above = lines[zone.start_line - 2].strip()
-                    if line_above != "" and line_above != "---":
-                        need_pad_above = True
+            if zone.start_line > 1 and not is_valid_display_math_pad(lines[zone.start_line - 2], is_top_level_bq):
+                need_pad_above = True
 
-                if zone.end_line < len(lines):
-                    line_below = lines[zone.end_line].strip()
-                    if line_below != "" and line_below != "---":
-                        need_pad_below = True
+            if zone.end_line < len(lines) and not is_valid_display_math_pad(lines[zone.end_line], is_top_level_bq):
+                need_pad_below = True
 
-                if need_pad_above or need_pad_below:
-                    msg_parts = []
-                    if need_pad_above:
-                        msg_parts.append("above")
-                    if need_pad_below:
-                        msg_parts.append("below")
-                    violations.append(
-                        Violation(
-                            rule_id=self.id,
-                            message=f"Display math block must be padded with a blank line {' and '.join(msg_parts)}.",
-                            line=zone.start_line,
-                            col=1,
-                            severity=self.severity,
-                        )
+            if need_pad_above or need_pad_below:
+                msg_parts = []
+                if need_pad_above:
+                    msg_parts.append("above")
+                if need_pad_below:
+                    msg_parts.append("below")
+                violations.append(
+                    Violation(
+                        rule_id=self.id,
+                        message=f"Display math block must be padded with a blank line {' and '.join(msg_parts)}.",
+                        line=zone.start_line,
+                        col=1,
+                        severity=self.severity,
                     )
+                )
 
             # Synthesize ONE unified edit if indented, has internal blanks, or missing padding
             if is_indented or has_internal_blanks or need_pad_above or need_pad_below:
-                pad_above = "\n" if need_pad_above else ""
-                pad_below = "\n" if need_pad_below else ""
+                pad_above = ""
+                if need_pad_above:
+                    pad_above = (
+                        ">\n" if (is_top_level_bq and lines[zone.start_line - 2].lstrip().startswith(">")) else "\n"
+                    )
+                pad_below = ""
+                if need_pad_below:
+                    pad_below = ">\n" if (is_top_level_bq and lines[zone.end_line].lstrip().startswith(">")) else "\n"
                 opening = "$$\n" if is_indented else zone.lines[0]
                 if not opening.endswith("\n"):
                     opening += "\n"
