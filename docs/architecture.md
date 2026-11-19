@@ -63,9 +63,7 @@ When multiple rules report violations across a document, applying text edits nai
    - Primary: Descending by `start_line` (bottom-up).
    - Secondary: Descending by `start_col` (right-to-left).
 2. **Deterministic Mutation:** Because edits are applied from bottom-right to top-left, earlier character columns and preceding line numbers remain untouched throughout the mutation pass.
-3. **Idempotency Guarantee:**
-   $$\text{fix}(\text{fix}(c)) \equiv \text{fix}(c)$$
-   Running `fix` a second time produces an identical output with zero new edits.
+3. **Idempotency Guarantee:** Running `fix` a second time produces an identical output with zero new edits (`fix(fix(c)) == fix(c)`).
 
 ---
 
@@ -118,6 +116,7 @@ src/gfm_math_lint/
 ├── cli.py              # CLI argument parser and command handlers
 ├── comment.py          # Safe GitHub PR/Issue comment delivery via stdin streaming
 ├── config.py           # pyproject.toml configuration loader and exclusion filters
+├── emulator.py         # Zero-dependency CommonMark math escape & flanking emulator
 ├── fixer.py            # Reverse-offset edit algebra and unified diff generator
 ├── linter.py           # Orchestrator running rules against tokenized documents
 ├── py.typed            # PEP 561 type annotation marker
@@ -128,7 +127,6 @@ src/gfm_math_lint/
     ├── base.py         # Abstract base classes: Rule, Violation, Severity
     ├── code_rules.py   # Fence nesting and inline code backtick rules (GFM-C**)
     ├── diagram_rules.py# Mermaid syntax and fence symmetry rules (GFM-D**)
-    ├── image_rules.py  # Image format optimization rules (GFM-I**)
     ├── math_rules.py   # LaTeX, KaTeX, and MathJax rendering rules (GFM-M**)
     ├── shell_rules.py  # Unsafe shell argument scanner (GFM-S**)
     └── table_rules.py  # Table pipe collision rules (GFM-T**)

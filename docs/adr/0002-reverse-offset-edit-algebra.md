@@ -24,8 +24,7 @@ All automated fixes are applied using a **reverse-offset edit algebra**:
 ### Positive
 - Mutating text at line $L$, column $C$ has zero effect on any coordinates at earlier lines or earlier columns on line $L$.
 - Eliminates offset recalculation overhead.
-- Guarantees strict idempotency:
-  $$\text{fix}(\text{fix}(c)) \equiv \text{fix}(c)$$
+- Guarantees strict idempotency: `fix(fix(c)) == fix(c)`.
 
 ### Negative
 - Overlapping edit ranges from different rules must be detected and de-duplicated to prevent collisions (handled by the fixer's collision rejection pass).

@@ -5,7 +5,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/jacobhammond/gfm-math-lint/blob/main/LICENSE)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 
-Zero-dependency, high-performance GitHub Flavored Markdown (GFM) linter and auto-fixer specializing in LaTeX/MathJax math syntax, CommonMark table escaping, fenced code nesting, Mermaid diagram boundaries, shell script expansion guards, and modern AVIF asset recommendations.
+Zero-dependency, high-performance GitHub Flavored Markdown (GFM) linter and auto-fixer specializing in LaTeX/MathJax & KaTeX dual-engine math syntax, CommonMark table escaping, fenced code nesting, Mermaid diagram boundaries, and shell script expansion guards.
 
 > [!IMPORTANT]
 > 🗺️ **Active Development Roadmap & Conformance Crucible:**  
@@ -35,7 +35,7 @@ Comprehensive technical guides, API references, and architectural records are ma
 | 🗺️ **[Development Roadmap & Retrospective](ROADMAP.md)** | Multi-phase development roadmap, Dual-Engine compatibility matrix, and Conformance Crucible gating harness. |
 | 🏛️ **[Architecture & Engine Design](docs/architecture.md)** | 8-zone lexical state machine, multi-stage compilation pipeline, reverse-offset edit algebra, and verification mechanics. |
 | 🐍 **[Python API Reference & Recipes](docs/api.md)** | Programmatic library reference (`Linter`, `LintResult`, `LintConfig`, `Verifier`) with recipes for pytest, CI, and Sphinx/MkDocs. |
-| 📖 **[Complete Rule Catalog & Authoring Guide](docs/rules.md)** | In-depth specifications for all 19 rules, CommonMark/KaTeX failure mode mechanics, and custom rule development tutorial. |
+| 📖 **[Complete Rule Catalog & Authoring Guide](docs/rules.md)** | In-depth specifications for all 27 rules, CommonMark/KaTeX failure mode mechanics, and custom rule development tutorial. |
 | 📋 **[Architectural Decision Records (ADRs)](docs/adr/README.md)** | Technical justifications for zero-dependency stdlib, reverse-offset edit algebra, state-machine tokenization, and live GitHub API verification. |
 
 ---
@@ -72,8 +72,11 @@ gfm-math-lint check --format github docs/
 # Preview automated fixes as a unified diff without modifying files
 gfm-math-lint check --diff docs/
 
-# Automatically fix violations in-place using the 'fix' shortcut
+# Automatically fix violations in-place using the 'fix' shortcut (exits 0 when clean)
 gfm-math-lint fix docs/ README.md
+
+# Target a specific rendering engine profile (dual, github, or vscode)
+gfm-math-lint check --target dual docs/
 ```
 
 ### 2. Scanning Shell Scripts & CI Workflows
@@ -170,7 +173,7 @@ Add `gfm-math-lint` to your `.pre-commit-config.yaml` to enforce valid equations
 ```yaml
 repos:
   - repo: https://github.com/jacobhammond/gfm-math-lint
-    rev: v0.1.2
+    rev: v0.2.0
     hooks:
       # Validates math, table, code fence, and boundary issues
       - id: gfm-math-lint
@@ -192,9 +195,12 @@ exclude = [
     "vendor/**",
 ]
 
+# Target rendering engine profile: "dual" (default), "github", or "vscode"
+target = "dual"
+
 # Globally ignored rule IDs
 ignore = [
-    "GFM-I01",  # Allow PNG/JPEG images without AVIF conversion warning
+    "GFM-M10",  # Allow unescaped currency dollar signs
 ]
 
 # Per-file rule ignores
@@ -228,26 +234,33 @@ The following rules are enforced by `gfm-math-lint`. For detailed failure mode e
 
 | Rule ID | Category | Name | Severity | Auto-Fix | Canonical Guide |
 | :--- | :--- | :--- | :---: | :---: | :--- |
-| `GFM-M01` | Math | `math-code-fence-to-display` | Error | Yes | [Details](docs/rules.md#gfm-m01-math-code-fence-to-display) |
+| `GFM-M01` | Math | `math-fence-conversion` | Error | Yes | [Details](docs/rules.md#gfm-m01-math-fence-conversion) |
 | `GFM-M02` | Math | `display-math-isolation` | Error | Yes | [Details](docs/rules.md#gfm-m02-display-math-isolation) |
 | `GFM-M03` | Math | `text-mode-underscore-escape` | Error | Yes | [Details](docs/rules.md#gfm-m03-text-mode-underscore-escape) |
 | `GFM-M04` | Math | `inline-math-whitespace` | Error | Yes | [Details](docs/rules.md#gfm-m04-inline-math-whitespace) |
-| `GFM-M05` | Math | `curly-brace-escape` | Error | Yes | [Details](docs/rules.md#gfm-m05-curly-brace-escape) |
+| `GFM-M05` | Math | `backslash-punctuation-escape` | Error | Yes | [Details](docs/rules.md#gfm-m05-backslash-punctuation-escape) |
 | `GFM-M06` | Math | `relational-operator-collision` | Error | Yes | [Details](docs/rules.md#gfm-m06-relational-operator-collision) |
 | `GFM-M07` | Math | `asterisk-emphasis-collision` | Error | Yes | [Details](docs/rules.md#gfm-m07-asterisk-emphasis-collision) |
-| `GFM-M08` | Math | `disallowed-macro-conversion` | Error | Yes | [Details](docs/rules.md#gfm-m08-disallowed-macro-conversion) |
+| `GFM-M08` | Math | `disallowed-macro` | Error | Yes | [Details](docs/rules.md#gfm-m08-disallowed-macro) |
 | `GFM-M09` | Math | `align-environment` | Error | Yes | [Details](docs/rules.md#gfm-m09-align-environment) |
 | `GFM-M10` | Math | `currency-dollar-sign` | Warning | Yes | [Details](docs/rules.md#gfm-m10-currency-dollar-sign) |
 | `GFM-M11` | Math | `latex-delimiters-conversion` | Error | Yes | [Details](docs/rules.md#gfm-m11-latex-delimiters-conversion) |
 | `GFM-M12` | Math | `inline-math-underscore-collision` | Error | Yes | [Details](docs/rules.md#gfm-m12-inline-math-underscore-collision) |
 | `GFM-M13` | Math | `math-delimiter-boundaries` | Error | Yes | [Details](docs/rules.md#gfm-m13-math-delimiter-boundaries) |
+| `GFM-M14` | Math | `code-syntax-in-math` | Warning | Yes | [Details](docs/rules.md#gfm-m14-code-syntax-in-math) |
+| `GFM-M15` | Math | `cross-engine-latex-compat` | Error | Yes | [Details](docs/rules.md#gfm-m15-cross-engine-latex-compat) |
+| `GFM-M16` | Math | `display-linebreak-eol` | Error | Yes | [Details](docs/rules.md#gfm-m16-display-linebreak-eol) |
+| `GFM-M17` | Math | `display-line-block-start` | Error | Yes | [Details](docs/rules.md#gfm-m17-display-line-block-start) |
+| `GFM-M18` | Math | `non-ascii-in-math` | Warning | Yes | [Details](docs/rules.md#gfm-m18-non-ascii-in-math) |
 | `GFM-T01` | Tables | `table-pipe-collision` | Error | Yes | [Details](docs/rules.md#gfm-t01-table-pipe-collision) |
-| `GFM-C01` | Code | `nested-fence-length` | Error | Yes | [Details](docs/rules.md#gfm-c01-nested-fence-length) |
-| `GFM-C02` | Code | `inline-code-backticks` | Error | Yes | [Details](docs/rules.md#gfm-c02-inline-code-backticks) |
+| `GFM-C01` | Code | `fence-nesting-length` | Error | Yes | [Details](docs/rules.md#gfm-c01-fence-nesting-length) |
+| `GFM-C02` | Code | `inline-code-backtick-nesting` | Error | Yes | [Details](docs/rules.md#gfm-c02-inline-code-backtick-nesting) |
 | `GFM-D01` | Diagrams | `mermaid-identifier` | Warning | No | [Details](docs/rules.md#gfm-d01-mermaid-identifier) |
-| `GFM-D02` | Diagrams | `code-fence-symmetry` | Error | Yes | [Details](docs/rules.md#gfm-d02-code-fence-symmetry) |
+| `GFM-D02` | Diagrams | `fence-boundary-symmetry` | Error | Yes | [Details](docs/rules.md#gfm-d02-fence-boundary-symmetry) |
+| `GFM-D03` | Diagrams | `mermaid-newline-linebreak` | Error | Yes | [Details](docs/rules.md#gfm-d03-mermaid-newline-linebreak) |
+| `GFM-D04` | Diagrams | `mermaid-label-special-chars` | Error | Yes | [Details](docs/rules.md#gfm-d04-mermaid-label-special-chars) |
+| `GFM-D05` | Diagrams | `math-in-mermaid` | Warning | No | [Details](docs/rules.md#gfm-d05-math-in-mermaid) |
 | `GFM-S01` | Shell | `unsafe-shell-expansion` | Error | No | [Details](docs/rules.md#gfm-s01-unsafe-shell-expansion) |
-| `GFM-I01` | Images | `image-avif-format` | Warning | No | [Details](docs/rules.md#gfm-i01-image-avif-format) |
 
 ---
 
