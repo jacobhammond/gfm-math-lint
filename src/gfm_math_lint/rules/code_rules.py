@@ -20,7 +20,7 @@ BACKTICK_RUN_RE = re.compile(r"`+")
 
 _PLAIN_FENCE_INFO: frozenset[str] = frozenset({"", "text", "plaintext", "txt"})
 _TREE_LISTING_RE = re.compile(r"[\u251c\u2514]\u2500\u2500")
-_BOX_ARROW_RE = re.compile(r"(?:[\u25ba\u25c4\u25b2\u25bc\u2192\u2190\u2191\u2193]|-->|<--|->|<-|==>)")
+_BOX_ARROW_RE = re.compile(r"(?:[\u25ba\u25c4\u25b2\u25bc\u2192\u2190\u2191\u2193]|->|<-|==>)")
 _ASCII_BOX_BORDER_RE = re.compile(r"\+-{3,}\+")
 _ASCII_BOX_PIPE_RE = re.compile(r"\|[^|\n]+\|")
 _EQ_REL_RE = re.compile(r"(?:=|[\u2248\u2264\u2265\u2261])")

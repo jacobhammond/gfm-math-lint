@@ -246,7 +246,7 @@ flowchart LR
 1. **Block-Context Tokenizer (`src/gfm_math_lint/tokenizer.py`):** Tracks `parent_block` (`None | "list_item" | "blockquote" | "table"`), `indent_level`, and inline spans (ignoring `` `$...$` `` inside code spans per `REG-20`).
 2. **Zero-Dependency GFM Emulator (`src/gfm_math_lint/emulator.py`):**
    - Pure Python standard-library implementation (strictly honoring [ADR 0001: Zero External Runtime Dependencies](docs/adr/0001-zero-dependency-stdlib.md)):
-     - Applies CommonMark §2.4 backslash-punctuation unescaping (`\\([!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~])` $\to$ `\1`), preserving only end-of-line `\\` inside `$$...$$`.
+     - Applies CommonMark §2.4 backslash-punctuation unescaping (`` \\([!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~]) `` $\to$ `\1`), preserving only end-of-line `\\` inside `$$...$$`.
      - Evaluates CommonMark §6.2 emphasis delimiter-run flanking rules (`_` and `*`) across inline spans.
      - Detects CommonMark block interruptions (`+ `, `- `, `> `, `#`, `1. `, setext underlines) and list-indentation rules inside `$$...$$`.
      - Enforces GFM opening/closing `$` boundary constraints (rejecting `base-$e$`, `$10$dB`, `$f(x)$)`).
