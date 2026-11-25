@@ -49,10 +49,10 @@ jobs:
         run: uv run --no-sync pre-commit run --all-files
 
       - name: Self-check Markdown with gfm-math-lint
-        run: uv run --locked gfm-math-lint check README.md CHANGELOG.md CONTRIBUTING.md docs/ .github/
+        run: uv run --locked gfm-math-lint check README.md CHANGELOG.md CONTRIBUTING.md ROADMAP.md docs/ .github/ actions/
 
       - name: Self-check Shell scripts with gfm-math-lint
-        run: uv run --locked gfm-math-lint check-shell .github/
+        run: uv run --locked gfm-math-lint check-shell .github/ actions/
 
       - name: Verify package build and twine metadata
         run: |

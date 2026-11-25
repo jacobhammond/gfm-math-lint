@@ -2,6 +2,9 @@
 
 This catalog provides detailed specifications for all 29 rules (plus `GFM-E01` differential fallback) implemented in **gfm-math-lint**, explaining why each failure mode occurs on GitHub, how the auto-fixer repairs it, and how to write custom rules.
 
+> [!TIP]
+> Looking for a quick one-page author reference? See the **[GFM Math & Diagram Safe Subset Cheat Sheet](safe-subset-cheatsheet.md)**.
+
 ---
 
 ## Rule Summary Matrix
@@ -196,30 +199,37 @@ $x < y$
 
 ## Authoring Custom Rules
 
-You can extend `gfm-math-lint` with custom rules by subclassing `gfm_math_lint.rules.base.Rule`:
+You can extend `gfm-math-lint` with custom rules by implementing the `Rule` protocol from `gfm_math_lint.rules.base`:
 
 ```python
-from gfm_math_lint.rules.base import Rule, Violation, Severity
-from gfm_math_lint.tokenizer import Token, ZoneType
+from collections.abc import Sequence
+
+from gfm_math_lint.rules.base import Rule, Violation
+from gfm_math_lint.tokenizer import DocumentZone, Zone, scan_inline_spans
+
 
 class RuleCustom01(Rule):
-    id = "GFM-X01"
-    name = "custom-math-check"
-    description = "Example custom rule checking math expressions."
-    severity = Severity.WARNING
+    id: str = "GFM-X01"
+    name: str = "custom-math-check"
+    description: str = "Example custom rule checking math expressions."
+    severity: str = "warning"
 
-    def check_token(self, token: Token, file_path: str) -> list[Violation]:
-        violations = []
-        if token.zone_type == ZoneType.INLINE_MATH and "\\foo" in token.content:
-            violations.append(
-                Violation(
-                    rule_id=self.id,
-                    rule_name=self.name,
-                    message="Use of \\foo is deprecated in math formulas.",
-                    line=token.line,
-                    col=token.col,
-                    severity=self.severity,
-                )
-            )
+    def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+        violations: list[Violation] = []
+        for zone in zones:
+            if zone.zone_type in (Zone.PROSE, Zone.TABLE):
+                for idx, line in enumerate(zone.lines):
+                    line_no = zone.start_line + idx
+                    for span in scan_inline_spans(line, line_no):
+                        if span.span_type == "inline_math" and "\\foo" in span.content:
+                            violations.append(
+                                Violation(
+                                    rule_id=self.id,
+                                    message="Use of \\foo is deprecated in math formulas.",
+                                    line=line_no,
+                                    col=span.start_col,
+                                    severity=self.severity,
+                                )
+                            )
         return violations
 ```

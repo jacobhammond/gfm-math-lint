@@ -22,6 +22,7 @@ from gfm_math_lint.linter import (
     violation_to_dict,
 )
 from gfm_math_lint.probe import run_probes
+from gfm_math_lint.rules.base import SAFE_SUBSET_DOCS_URL
 from gfm_math_lint.rules.shell_rules import RuleS01
 from gfm_math_lint.verifier import (
     VerificationIssue,
@@ -37,7 +38,7 @@ def get_version() -> str:
     try:
         return metadata.version("gfm-math-lint")
     except metadata.PackageNotFoundError:
-        return "0.4.0"
+        return "1.0.0"
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -45,6 +46,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gfm-math-lint",
         description="Linter and auto-fixer for GitHub-Flavored Markdown math, tables, code fences, and Mermaid",
+        epilog=f"Safe Subset Cheat Sheet: {SAFE_SUBSET_DOCS_URL}",
     )
     parser.add_argument(
         "-V",
@@ -408,6 +410,9 @@ def cmd_check(args: argparse.Namespace) -> int:
             "files": json_files,
         }
         sys.stdout.write(json.dumps(payload, indent=2) + "\n")
+
+    if args.format == "text" and total_violations > 0:
+        sys.stderr.write(f"Hint: Safe Subset Cheat Sheet: {SAFE_SUBSET_DOCS_URL}\n")
 
     if args.fix:
         return 1 if total_violations > 0 else 0

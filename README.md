@@ -8,8 +8,8 @@
 Zero-dependency, high-performance GitHub Flavored Markdown (GFM) linter and auto-fixer specializing in LaTeX/MathJax & KaTeX dual-engine math syntax, CommonMark table escaping, fenced code nesting, Mermaid diagram boundaries, and shell script expansion guards.
 
 > [!IMPORTANT]
-> 🗺️ **Active Development Roadmap & Conformance Crucible:**  
-> Review [ROADMAP.md](ROADMAP.md) for the active multi-phase development roadmap, dual-engine (GitHub Web vs. local editor KaTeX) compatibility specifications, and the objective Conformance Crucible test harness design.
+> 🗺️ **Roadmap & Conformance Crucible (`v1.0.0` Shipped):**  
+> Review [ROADMAP.md](ROADMAP.md) for the completed multi-phase development ledger, Dual-Engine compatibility matrix, and 156-scenario Conformance Crucible gating harness, or jump straight to the one-page [Safe Subset Cheat Sheet](docs/safe-subset-cheatsheet.md).
 
 ---
 
@@ -33,11 +33,14 @@ Comprehensive technical guides, API references, and architectural records are ma
 
 | Guide | Description |
 | :--- | :--- |
-| 🗺️ **[Development Roadmap & Retrospective](ROADMAP.md)** | Multi-phase development roadmap, Dual-Engine compatibility matrix, and Conformance Crucible gating harness. |
+| ⚡ **[Safe Subset Cheat Sheet](docs/safe-subset-cheatsheet.md)** | One-page dual-engine authoring reference, live-confirmed `P1`–`P11` GitHub probe table, and Privacy Model. |
+| 🗺️ **[Development Roadmap](ROADMAP.md)** | Completed `v0.1.0`–`v1.0.0` engineering plan, Issue/Regression matrices, and Conformance Crucible harness. |
 | 🏛️ **[Architecture & Engine Design](docs/architecture.md)** | 8-zone lexical state machine, multi-stage compilation pipeline, reverse-offset edit algebra, and verification mechanics. |
 | 🐍 **[Python API Reference & Recipes](docs/api.md)** | Programmatic library reference (`Linter`, `LintResult`, `LintConfig`, `Verifier`) with recipes for pytest, CI, and Sphinx/MkDocs. |
 | 📖 **[Complete Rule Catalog & Authoring Guide](docs/rules.md)** | In-depth specifications for all 29 rules (+ `GFM-E01` fallback), CommonMark/KaTeX failure mode mechanics, and custom rule development tutorial. |
-| 📋 **[Architectural Decision Records (ADRs)](docs/adr/README.md)** | Technical justifications for zero-dependency stdlib, reverse-offset edit algebra, state-machine tokenization, and live GitHub API verification. |
+| 🤖 **[GitHub Action Guide](actions/gfm-math-lint-action/README.md)** | Composite GitHub Action (`check`, `fix`, `verify`, `probe`, `check-shell`, JSON reports, and safe PR comments). |
+| 🔎 **[Field Retrospectives](docs/retrospectives/README.md)** | Archived Session 1 (`session-harvest-trace-01`) and Session 2 (`dual-doc-conversion-2026-11`) forensic traces. |
+| 📋 **[Architectural Decision Records (ADRs)](docs/adr/README.md)** | Technical justifications (`ADR 0001`–`0006`) for zero-dependency stdlib, edit algebra, tokenizer, and privacy-first verification. |
 
 ---
 
@@ -156,7 +159,7 @@ gfm-math-lint verify --browser docs/specification.md
 | **`probe`** | **Yes** (`--offline` skips) | **Optional** | **1 req / run** (synthetic only) | Single batched `/markdown` request (`P1`–`P11`) |
 | **`comment`** | **Yes** | **Yes** (Write access) | Standard GitHub API limits | GitHub CLI (`gh`) with stdin streaming |
 
-> For full architectural details on token resolution order and API rate limit mechanics, see [Architecture & Engine Design: Section 2.D](docs/architecture.md#d-the-verifier--github-api-oracle-gfm_math_lintverifier).
+> For full architectural details on token resolution order and API rate limit mechanics, see [Architecture & Engine Design: Section 2.D](docs/architecture.md#d-the-verifier--github-api-oracle-gfm_math_lintverifier) and the [Privacy Model](docs/safe-subset-cheatsheet.md#privacy-model).
 
 ### 5. Programmatic Python Library Usage
 
@@ -181,19 +184,39 @@ For full class methods, verifier functions, and pytest/CI recipes, see the [Pyth
 
 ---
 
-## Pre-Commit Hook Integration
+## Pre-Commit & GitHub Action Integration
 
-Add `gfm-math-lint` to your `.pre-commit-config.yaml` to enforce valid equations and secure shell scripts on commit:
+### Pre-Commit Hooks
+
+Add `gfm-math-lint` to your `.pre-commit-config.yaml` to enforce valid equations, offline differential verification, and secure shell scripts on commit:
 
 ```yaml
 repos:
   - repo: https://github.com/jacobhammond/gfm-math-lint
-    rev: v0.4.0
+    rev: v1.0.0
     hooks:
       # Validates math, table, code fence, and boundary issues
       - id: gfm-math-lint
+      # Optional: auto-fix safe violations in-place
+      # - id: gfm-math-fix
+      # Optional: run offline differential span & LaTeX verification
+      # - id: gfm-math-verify
       # Guards against unsafe shell expansions in CI workflows and scripts
       - id: gfm-shell-lint
+```
+
+### GitHub Action
+
+Run `gfm-math-lint` directly in GitHub Actions workflows using the included composite action (see [GitHub Action Guide](actions/gfm-math-lint-action/README.md) for `verify`, `probe`, JSON artifacts, and PR comments):
+
+```yaml
+- uses: jacobhammond/gfm-math-lint/actions/gfm-math-lint-action@v1.0.0
+  with:
+    mode: check
+    paths: "README.md docs/"
+    target: dual
+    format: github
+    version: "1.0.0"
 ```
 
 ---

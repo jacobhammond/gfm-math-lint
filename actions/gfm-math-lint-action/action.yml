@@ -1,0 +1,243 @@
+name: "GFM Math Lint"
+description: "Lint, auto-fix, verify, and probe GitHub-Flavored Markdown math, tables, code fences, and Mermaid diagrams."
+author: "Jacob Hammond"
+
+branding:
+  icon: "check-circle"
+  color: "blue"
+
+inputs:
+  mode:
+    description: "CLI subcommand to run: check, fix, verify, probe, or check-shell."
+    required: false
+    default: "check"
+  paths:
+    description: "Space-separated file or directory paths to inspect (ignored for probe)."
+    required: false
+    default: "."
+  target:
+    description: "Target rendering engine profile: dual, github, or vscode."
+    required: false
+    default: "dual"
+  format:
+    description: "Diagnostic output format: github, text, or json."
+    required: false
+    default: "github"
+  config:
+    description: "Optional path to a pyproject.toml configuration file."
+    required: false
+    default: ""
+  version:
+    description: "gfm-math-lint version to install from PyPI (e.g. '1.0.0'), 'local' for action repo source, or empty for latest."
+    required: false
+    default: ""
+  python-version:
+    description: "Python version to provision with uv."
+    required: false
+    default: "3.11"
+  remote-verify:
+    description: "Pass --remote to verify (sends markdown to GitHub /markdown API)."
+    required: false
+    default: "false"
+  offline-probe:
+    description: "Pass --offline to probe (skips GitHub /markdown API call)."
+    required: false
+    default: "false"
+  strict-katex:
+    description: "Pass --strict-katex to verify (requires local Node katex)."
+    required: false
+    default: "false"
+  no-katex:
+    description: "Pass --no-katex to verify (disables local Node.js KaTeX validation)."
+    required: false
+    default: "false"
+  json-output:
+    description: "Optional path to write structured JSON diagnostics."
+    required: false
+    default: ""
+  post-comment:
+    description: "Post a PR summary comment via 'gfm-math-lint comment' when violations occur (requires pull-requests: write)."
+    required: false
+    default: "false"
+  github-token:
+    description: "GitHub token used for probe, verify --remote, or post-comment."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  exit-code:
+    description: "Exit code returned by gfm-math-lint (0 = clean, 1 = violations/anomalies, 2 = error)."
+    value: ${{ steps.run.outputs.exit-code }}
+  report-path:
+    description: "Path to the generated JSON report when json-output is configured."
+    value: ${{ steps.run.outputs.report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup uv
+      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install gfm-math-lint
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        VENV_DIR="$RUNNER_TEMP/gfm-math-lint-venv"
+        uv venv "$VENV_DIR"
+        if [ "$INPUT_VERSION" = "local" ]; then
+          uv pip install --python "$VENV_DIR/bin/python" "$ACTION_PATH/../.."
+        elif [ -n "$INPUT_VERSION" ]; then
+          uv pip install --python "$VENV_DIR/bin/python" "gfm-math-lint==$INPUT_VERSION"
+        else
+          uv pip install --python "$VENV_DIR/bin/python" "gfm-math-lint"
+        fi
+
+    - name: Run gfm-math-lint
+      id: run
+      shell: bash
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_PATHS: ${{ inputs.paths }}
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_REMOTE_VERIFY: ${{ inputs.remote-verify }}
+        INPUT_OFFLINE_PROBE: ${{ inputs.offline-probe }}
+        INPUT_STRICT_KATEX: ${{ inputs.strict-katex }}
+        INPUT_NO_KATEX: ${{ inputs.no-katex }}
+        INPUT_JSON_OUTPUT: ${{ inputs.json-output }}
+        INPUT_POST_COMMENT: ${{ inputs.post-comment }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        set -uo pipefail
+        BIN="$RUNNER_TEMP/gfm-math-lint-venv/bin/gfm-math-lint"
+
+        case "$INPUT_MODE" in
+          check|fix|verify|probe|check-shell) ;;
+          *)
+            echo "::error::Invalid gfm-math-lint mode: $INPUT_MODE"
+            exit 2
+            ;;
+        esac
+
+        case "$INPUT_TARGET" in
+          dual|github|vscode) ;;
+          *)
+            echo "::error::Invalid gfm-math-lint target: $INPUT_TARGET"
+            exit 2
+            ;;
+        esac
+
+        case "$INPUT_FORMAT" in
+          github|text|json) ;;
+          *)
+            echo "::error::Invalid gfm-math-lint format: $INPUT_FORMAT"
+            exit 2
+            ;;
+        esac
+
+        cmd=("$BIN" "$INPUT_MODE")
+
+        if [ "$INPUT_MODE" = "check" ] || [ "$INPUT_MODE" = "fix" ]; then
+          cmd+=("--target" "$INPUT_TARGET" "--format" "$INPUT_FORMAT")
+          if [ -n "$INPUT_CONFIG" ]; then
+            cmd+=("--config" "$INPUT_CONFIG")
+          fi
+        elif [ "$INPUT_MODE" = "check-shell" ]; then
+          cmd+=("--format" "$INPUT_FORMAT")
+        elif [ "$INPUT_MODE" = "verify" ]; then
+          cmd+=("--format" "$INPUT_FORMAT")
+          if [ -n "$INPUT_CONFIG" ]; then
+            cmd+=("--config" "$INPUT_CONFIG")
+          fi
+          if [ "$INPUT_REMOTE_VERIFY" = "true" ]; then
+            cmd+=("--remote")
+          fi
+          if [ "$INPUT_STRICT_KATEX" = "true" ]; then
+            cmd+=("--strict-katex")
+          fi
+          if [ "$INPUT_NO_KATEX" = "true" ]; then
+            cmd+=("--no-katex")
+          fi
+        elif [ "$INPUT_MODE" = "probe" ]; then
+          if [ "$INPUT_FORMAT" = "json" ]; then
+            cmd+=("--format" "json")
+          fi
+          if [ "$INPUT_OFFLINE_PROBE" = "true" ]; then
+            cmd+=("--offline")
+          fi
+        fi
+
+        if [ "$INPUT_MODE" != "probe" ]; then
+          read -r -a path_args <<< "$INPUT_PATHS"
+          cmd+=("${path_args[@]}")
+        fi
+
+        set +e
+        "${cmd[@]}"
+        exit_code=$?
+        set -e
+
+        report_path=""
+        if [ -n "$INPUT_JSON_OUTPUT" ]; then
+          mkdir -p "$(dirname "$INPUT_JSON_OUTPUT")"
+          json_cmd=("$BIN" "$INPUT_MODE")
+          if [ "$INPUT_MODE" = "check" ] || [ "$INPUT_MODE" = "fix" ]; then
+            json_cmd+=("--target" "$INPUT_TARGET" "--format" "json")
+            if [ -n "$INPUT_CONFIG" ]; then
+              json_cmd+=("--config" "$INPUT_CONFIG")
+            fi
+          elif [ "$INPUT_MODE" = "check-shell" ]; then
+            json_cmd+=("--format" "json")
+          elif [ "$INPUT_MODE" = "verify" ]; then
+            json_cmd+=("--format" "json")
+            if [ -n "$INPUT_CONFIG" ]; then
+              json_cmd+=("--config" "$INPUT_CONFIG")
+            fi
+            if [ "$INPUT_REMOTE_VERIFY" = "true" ]; then
+              json_cmd+=("--remote")
+            fi
+            if [ "$INPUT_STRICT_KATEX" = "true" ]; then
+              json_cmd+=("--strict-katex")
+            fi
+            if [ "$INPUT_NO_KATEX" = "true" ]; then
+              json_cmd+=("--no-katex")
+            fi
+          elif [ "$INPUT_MODE" = "probe" ]; then
+            json_cmd+=("--format" "json")
+            if [ "$INPUT_OFFLINE_PROBE" = "true" ]; then
+              json_cmd+=("--offline")
+            fi
+          fi
+          if [ "$INPUT_MODE" != "probe" ]; then
+            json_cmd+=("${path_args[@]}")
+          fi
+          "${json_cmd[@]}" > "$INPUT_JSON_OUTPUT" || true
+          report_path="$INPUT_JSON_OUTPUT"
+        fi
+
+        if [ "$INPUT_POST_COMMENT" = "true" ] && [ "$exit_code" -ne 0 ] && [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+          comment_file="$RUNNER_TEMP/gfm-math-lint-comment.md"
+          {
+            echo "## gfm-math-lint Report (\`$INPUT_MODE\`)"
+            echo ""
+            echo "- **Target profile:** \`$INPUT_TARGET\`"
+            echo "- **Exit code:** \`$exit_code\`"
+            echo "- **Reference:** [Safe Subset Cheat Sheet](https://github.com/jacobhammond/gfm-math-lint/blob/main/docs/safe-subset-cheatsheet.md)"
+          } > "$comment_file"
+          "$BIN" comment --pr "$PR_NUMBER" --file "$comment_file"
+        fi
+
+        {
+          echo "exit-code=$exit_code"
+          echo "report-path=$report_path"
+        } >> "$GITHUB_OUTPUT"
+
+        exit "$exit_code"
