@@ -158,6 +158,12 @@ def violation_to_dict(v: Violation, file_path: str = "") -> dict[str, Any]:
     return data
 
 
+_DROP_EXPLAINER_RULES: frozenset[str] = frozenset({"GFM-M02", "GFM-M13", "GFM-M17", "GFM-T01"})
+_MUTATION_EXPLAINER_RULES: frozenset[str] = frozenset(
+    {"GFM-M03", "GFM-M05", "GFM-M06", "GFM-M07", "GFM-M12", "GFM-M15", "GFM-M16", "GFM-T01"}
+)
+
+
 def span_diff_to_dict(d: SpanDiff) -> dict[str, Any]:
     """Serialize a `SpanDiff` to a JSON-compatible dictionary."""
     return {
@@ -166,6 +172,7 @@ def span_diff_to_dict(d: SpanDiff) -> dict[str, Any]:
         "intended": d.intended,
         "received": d.received,
         "line": d.line,
+        "col": d.col,
         "display": d.display,
     }
 
@@ -183,6 +190,7 @@ class LintResult:
     fixed_violations: list[Violation] = field(default_factory=list)
     remaining_violations: list[Violation] = field(default_factory=list)
     span_diff: SpanDiffTelemetry = field(default_factory=SpanDiffTelemetry)
+    initial_span_diff: SpanDiffTelemetry = field(default_factory=SpanDiffTelemetry)
 
     def to_json_dict(self, target: str = "dual") -> dict[str, Any]:
         """Serialize this `LintResult` to a machine-readable JSON dictionary."""
@@ -254,13 +262,14 @@ class Linter:
     def _collect_span_diff_fallback(
         self,
         content: str,
+        lines: Sequence[str],
         zones: list[DocumentZone],
         raw_rule_violations: list[Violation],
         suppression: SuppressionManager,
         file_path: str,
     ) -> tuple[SpanDiffTelemetry, list[Violation]]:
         """Run differential emulator and emit GFM-E01 for any unexplained span discrepancy."""
-        emu = emulate_gfm_document(content)
+        emu = emulate_gfm_document(content, zones=zones)
         telemetry = SpanDiffTelemetry(
             intended_count=len(emu.intended_spans),
             received_count=len(emu.received_spans),
@@ -273,23 +282,45 @@ class Linter:
         ):
             return telemetry, []
 
-        math_table_lines = {v.line for v in raw_rule_violations if v.rule_id.startswith(("GFM-M", "GFM-T"))}
+        # Also check explainer rules ignored via config so `ignore = ["GFM-M05"]` behaves
+        # consistently with inline `<!-- gfm-math-lint-disable GFM-M05 -->` suppressions.
+        all_explainer_ids = _DROP_EXPLAINER_RULES | _MUTATION_EXPLAINER_RULES
+        explainer_violations: list[Violation] = [v for v in raw_rule_violations if v.rule_id in all_explainer_ids]
+        for rule in self.rules:
+            if rule.id in all_explainer_ids and self.config.is_rule_ignored(rule.id, file_path, self.root_dir):
+                if isinstance(rule, _TargetConfigurable):
+                    rule.target = self.config.target
+                explainer_violations.extend(rule.check(lines, zones, file_path))
+
         display_zone_ranges: dict[int, tuple[int, int]] = {
             z.start_line: (z.start_line, z.end_line) for z in zones if z.zone_type == Zone.DISPLAY_MATH
         }
 
-        def _is_covered(line_no: int, is_display: bool) -> bool:
-            if line_no in math_table_lines:
-                return True
-            if is_display and line_no in display_zone_ranges:
-                start_ln, end_ln = display_zone_ranges[line_no]
-                return any(start_ln <= ln <= end_ln for ln in math_table_lines)
-            return False
+        def _violation_covers_diff(v: Violation, d: SpanDiff) -> bool:
+            if d.display and d.line in display_zone_ranges:
+                start_ln, end_ln = display_zone_ranges[d.line]
+                return start_ln <= v.line <= end_ln
+            if v.line != d.line:
+                return False
+            if d.end_col > d.col:
+                if d.col - 1 <= v.col <= d.end_col + 1:
+                    return True
+                return (
+                    v.edit is not None
+                    and v.edit.start_line <= d.line <= v.edit.end_line
+                    and v.edit.start_col <= d.end_col + 1
+                    and v.edit.end_col >= d.col - 1
+                )
+            return True
+
+        def _is_covered(d: SpanDiff) -> bool:
+            valid_ids = _DROP_EXPLAINER_RULES if d.category == "span-dropped" else _MUTATION_EXPLAINER_RULES
+            return any(v.rule_id in valid_ids and _violation_covers_diff(v, d) for v in explainer_violations)
 
         fallback: list[Violation] = []
         per_span_diffs = [d for d in emu.diffs if d.category in ("span-dropped", "span-mutated") and d.line > 0]
         for d in per_span_diffs:
-            if _is_covered(d.line, d.display):
+            if _is_covered(d):
                 continue
             if suppression.is_suppressed("GFM-E01", d.line):
                 continue
@@ -298,7 +329,7 @@ class Linter:
                     rule_id="GFM-E01",
                     message=f"Unexplained GFM math span discrepancy ({d.category}): {d.message}",
                     line=d.line,
-                    col=1,
+                    col=d.col,
                     severity="error",
                     edit=None,
                 )
@@ -307,7 +338,7 @@ class Linter:
         if (
             not per_span_diffs
             and any(d.category == "span-count-mismatch" for d in emu.diffs)
-            and not math_table_lines
+            and not any(v.rule_id in _DROP_EXPLAINER_RULES for v in explainer_violations)
             and not suppression.is_suppressed("GFM-E01", 1)
         ):
             mismatch = next(d for d in emu.diffs if d.category == "span-count-mismatch")
@@ -341,7 +372,7 @@ class Linter:
             key=lambda v: (v.line, v.col),
         )
         initial_telemetry, initial_fallback = self._collect_span_diff_fallback(
-            content, zones, raw_initial, suppression, file_path
+            content, lines, zones, raw_initial, suppression, file_path
         )
         sorted_violations = sorted([*rule_violations, *initial_fallback], key=lambda v: (v.line, v.col))
 
@@ -356,6 +387,7 @@ class Linter:
                 fixed_violations=[],
                 remaining_violations=sorted_violations,
                 span_diff=initial_telemetry,
+                initial_span_diff=initial_telemetry,
             )
 
         # Iterative fix application: resolve overlapping edits until convergence (max 5 passes)
@@ -416,13 +448,18 @@ class Linter:
                 key=lambda v: (v.line, v.col),
             )
             final_telemetry, post_fallback = self._collect_span_diff_fallback(
-                current_content, post_zones, raw_post, post_suppression, file_path
+                current_content, post_lines, post_zones, raw_post, post_suppression, file_path
             )
             post_violations = sorted([*post_rule_violations, *post_fallback], key=lambda v: (v.line, v.col))
 
         # Safe-Fix Guard (REG-22): roll back if fixing introduces a net-new unfixable violation
         initial_rule_ids = {v.rule_id for v in sorted_violations}
-        if current_content != content and any(v.rule_id not in initial_rule_ids for v in post_violations):
+        has_new_rule = any(
+            v.rule_id not in initial_rule_ids
+            and (v.rule_id != "GFM-E01" or len(final_telemetry.diffs) > len(initial_telemetry.diffs))
+            for v in post_violations
+        )
+        if current_content != content and has_new_rule:
             current_content = content
             post_violations = sorted_violations
             final_telemetry = initial_telemetry
@@ -457,6 +494,7 @@ class Linter:
             fixed_violations=fixed_violations,
             remaining_violations=remaining_violations,
             span_diff=final_telemetry,
+            initial_span_diff=initial_telemetry,
         )
 
     def lint_file(

@@ -18,6 +18,7 @@ from gfm_math_lint.linter import (
     _escape_workflow_property,
     format_violation_github,
     format_violation_text,
+    span_diff_to_dict,
     violation_to_dict,
 )
 from gfm_math_lint.probe import run_probes
@@ -309,24 +310,66 @@ def cmd_check(args: argparse.Namespace) -> int:
         except (OSError, UnicodeDecodeError) as e:
             sys.stderr.write(f"Error reading {file_path}: {e}\n")
             total_violations += 1
+            if is_json:
+                json_files.append(
+                    {
+                        "file": str(file_path),
+                        "target": config.target,
+                        "modified": False,
+                        "error": str(e),
+                        "violations": [],
+                        "fixed_violations": [],
+                        "remaining_violations": [],
+                        "span_diff": {"intended_count": 0, "received_count": 0, "diffs": []},
+                    }
+                )
             continue
         except Exception as e:
             sys.stderr.write(f"Internal error processing {file_path}: {e}\n")
             return 2
 
-        total_fixed_count += len(res.fixed_violations)
-        total_remaining_count += len(res.remaining_violations)
-        total_intended_spans += res.span_diff.intended_count
-        total_received_spans += res.span_diff.received_count
-        total_span_diffs += len(res.span_diff.diffs)
-
         if is_json:
-            entry = res.to_json_dict(target=config.target)
-            if args.diff:
-                entry["diff"] = res.diff
+            if args.fix:
+                entry = res.to_json_dict(target=config.target)
+                total_fixed_count += len(res.fixed_violations)
+                total_remaining_count += len(res.remaining_violations)
+                total_intended_spans += res.span_diff.intended_count
+                total_received_spans += res.span_diff.received_count
+                total_span_diffs += len(res.span_diff.diffs)
+                total_violations += len(res.remaining_violations)
+                if res.modified:
+                    total_modified += 1
+            else:
+                init_sd = res.initial_span_diff
+                entry = {
+                    "file": res.file_path,
+                    "target": config.target,
+                    "modified": False,
+                    "violations": [violation_to_dict(v) for v in res.violations],
+                    "fixed_violations": [],
+                    "remaining_violations": [violation_to_dict(v) for v in res.violations],
+                    "span_diff": {
+                        "intended_count": init_sd.intended_count,
+                        "received_count": init_sd.received_count,
+                        "diffs": [span_diff_to_dict(d) for d in init_sd.diffs],
+                    },
+                }
+                if args.diff:
+                    entry["would_modify"] = res.modified
+                    entry["diff"] = res.diff
+                total_remaining_count += len(res.violations)
+                total_intended_spans += init_sd.intended_count
+                total_received_spans += init_sd.received_count
+                total_span_diffs += len(init_sd.diffs)
+                total_violations += len(res.violations)
             json_files.append(entry)
-            total_violations += len(res.remaining_violations) if args.fix else len(res.violations)
         else:
+            total_fixed_count += len(res.fixed_violations)
+            total_remaining_count += len(res.remaining_violations)
+            total_intended_spans += res.span_diff.intended_count
+            total_received_spans += res.span_diff.received_count
+            total_span_diffs += len(res.span_diff.diffs)
+
             if args.diff and res.diff:
                 sys.stdout.write(res.diff)
 
@@ -341,7 +384,10 @@ def cmd_check(args: argparse.Namespace) -> int:
                     sys.stdout.write(format_fn(v, str(file_path)) + "\n")
                 total_violations += len(res.violations)
 
-        if res.modified:
+            if res.modified:
+                total_modified += 1
+
+        if not is_json and args.diff and res.modified and not args.fix:
             total_modified += 1
 
     if is_json:
@@ -545,6 +591,29 @@ def _verification_issue_to_dict(issue: VerificationIssue) -> dict[str, Any]:
     }
 
 
+def _build_verify_json_payload(
+    mode: str,
+    files: list[dict[str, Any]],
+    intended: int,
+    received: int,
+    errors: int,
+    warnings: int,
+) -> dict[str, Any]:
+    return {
+        "version": get_version(),
+        "command": "verify",
+        "mode": mode,
+        "summary": {
+            "files_verified": len(files),
+            "intended_math_spans": intended,
+            "received_math_spans": received,
+            "errors": errors,
+            "warnings": warnings,
+        },
+        "files": files,
+    }
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """Execute 'verify' subcommand."""
     is_stdout = getattr(args, "stdout", False)
@@ -593,18 +662,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
         warning_count = sum(1 for i in report.issues if i.severity == "warning")
 
         if is_json:
-            payload = {
-                "version": get_version(),
-                "command": "verify",
-                "mode": report.mode,
-                "summary": {
-                    "files_verified": 1,
-                    "intended_math_spans": report.intended_count,
-                    "received_math_spans": report.received_count,
-                    "errors": error_count,
-                    "warnings": warning_count,
-                },
-                "files": [
+            payload = _build_verify_json_payload(
+                mode=report.mode,
+                files=[
                     {
                         "file": "<stdin>",
                         "mode": report.mode,
@@ -614,7 +674,11 @@ def cmd_verify(args: argparse.Namespace) -> int:
                         "mermaid_previews": [str(p) for p in report.mermaid_previews],
                     }
                 ],
-            }
+                intended=report.intended_count,
+                received=report.received_count,
+                errors=error_count,
+                warnings=warning_count,
+            )
             diag_stream.write(json.dumps(payload, indent=2) + "\n")
         else:
             diag_stream.write(f"<stdin>: Recognized {report.received_count}/{report.intended_count} math spans\n")
@@ -669,19 +733,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
     filtered_files = [f for f in md_files if not config.is_file_excluded(f, root_dir)]
     if not filtered_files:
         if is_json:
-            payload = {
-                "version": get_version(),
-                "command": "verify",
-                "mode": "remote" if is_remote else "local",
-                "summary": {
-                    "files_verified": 0,
-                    "intended_math_spans": 0,
-                    "received_math_spans": 0,
-                    "errors": 0,
-                    "warnings": 0,
-                },
-                "files": [],
-            }
+            payload = _build_verify_json_payload(
+                mode="remote" if is_remote else "local",
+                files=[],
+                intended=0,
+                received=0,
+                errors=0,
+                warnings=0,
+            )
             diag_stream.write(json.dumps(payload, indent=2) + "\n")
         else:
             sys.stderr.write("No markdown files found to verify.\n")
@@ -753,19 +812,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 )
 
     if is_json:
-        payload = {
-            "version": get_version(),
-            "command": "verify",
-            "mode": "remote" if is_remote else "local",
-            "summary": {
-                "files_verified": len(json_files),
-                "intended_math_spans": total_intended,
-                "received_math_spans": total_received,
-                "errors": total_errors,
-                "warnings": total_warnings,
-            },
-            "files": json_files,
-        }
+        payload = _build_verify_json_payload(
+            mode="remote" if is_remote else "local",
+            files=json_files,
+            intended=total_intended,
+            received=total_received,
+            errors=total_errors,
+            warnings=total_warnings,
+        )
         diag_stream.write(json.dumps(payload, indent=2) + "\n")
 
     combined_html = "\n<hr>\n".join(all_html_chunks)

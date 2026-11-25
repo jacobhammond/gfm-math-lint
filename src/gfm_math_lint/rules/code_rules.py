@@ -29,7 +29,13 @@ _UNICODE_MATH_GLYPH_RE = re.compile(
 )
 _DIFF_RATIO_RE = re.compile(r"\bd[A-Za-z_]\w*/d[A-Za-z_]\w*\b")
 _RAW_LATEX_CMD_RE = re.compile(
-    r"\\(?:frac|sqrt|sum|int|partial|alpha|beta|gamma|delta|Delta|Sigma|omega|begin|mathrm|text)\b"
+    r"\\(?:(?:frac|dfrac|tfrac|sqrt|begin|mathrm|text|mathbb|mathcal|mathbf)\{|"
+    r"(?:sum|int|iint|oint|partial|nabla|alpha|beta|gamma|delta|epsilon|theta|lambda|"
+    r"mu|pi|rho|sigma|tau|phi|psi|omega|Delta|Gamma|Lambda|Omega|Phi|Psi|Sigma|Theta|"
+    r"cdot|times|le|leq|ge|geq|neq|approx|equiv|infty|pm|mp|to|rightarrow|leftarrow)\b)"
+)
+_CLI_OR_DIRECTIVE_RE = re.compile(
+    r"(?:<!--\s*gfm-math-lint-|\bgfm-math-lint\s+(?:check|fix|verify|probe|comment|post|check-shell)\b)"
 )
 _BQ_PREFIX_RE = re.compile(r"^\s*(?:>\s*)+")
 
@@ -194,16 +200,11 @@ class RuleC02(Rule):
 
 
 def _is_ascii_box_diagram(text: str) -> bool:
-    """Return True if `text` looks like a 2D ASCII/Unicode box-drawing diagram (excluding file trees)."""
+    """Return True if `text` looks like a 2D ASCII/Unicode box-drawing flowchart (excluding tables & file trees)."""
     has_unicode_top = (
         ("\u250c" in text and "\u2510" in text)
         or ("\u2554" in text and "\u2557" in text)
         or ("\u256d" in text and "\u256e" in text)
-    )
-    has_unicode_bottom = (
-        ("\u2514" in text and "\u2518" in text)
-        or ("\u255a" in text and "\u255d" in text)
-        or ("\u2570" in text and "\u256f" in text)
     )
     ascii_borders = len(_ASCII_BOX_BORDER_RE.findall(text))
     has_ascii_box = ascii_borders >= 1 and bool(_ASCII_BOX_PIPE_RE.search(text))
@@ -212,15 +213,13 @@ def _is_ascii_box_diagram(text: str) -> bool:
         return False
 
     has_flow = bool(_BOX_ARROW_RE.search(text))
-    if has_unicode_top and (has_unicode_bottom or has_flow):
-        return True
-    return has_ascii_box and (ascii_borders >= 2 or has_flow)
+    return has_flow and (has_unicode_top or has_ascii_box)
 
 
 def _has_unrendered_math(lines: Sequence[str]) -> bool:
     """Return True if plain-text fence lines contain mathematical equations or LaTeX macros."""
     for ln in lines:
-        if "gfm-math-lint" in ln:
+        if _CLI_OR_DIRECTIVE_RE.search(ln):
             continue
         if _RAW_LATEX_CMD_RE.search(ln):
             return True
@@ -243,17 +242,15 @@ class RuleC03(Rule):
         for zone in zones:
             if zone.zone_type != Zone.FENCED_CODE or not zone.is_closed or zone.fence_len < 3:
                 continue
-            if zone.info.strip().lower() not in _PLAIN_FENCE_INFO:
+            info_lang = (zone.info.strip().split() or [""])[0].lower()
+            if info_lang not in _PLAIN_FENCE_INFO:
                 continue
 
             inner_lines = zone.lines[1:-1] if len(zone.lines) >= 2 else []
             if not inner_lines:
                 continue
 
-            cleaned = [
-                _BQ_PREFIX_RE.sub("", ln) if (zone.parent_block == "blockquote" or ln.lstrip().startswith(">")) else ln
-                for ln in inner_lines
-            ]
+            cleaned = [_BQ_PREFIX_RE.sub("", ln) if zone.parent_block == "blockquote" else ln for ln in inner_lines]
             body = "".join(cleaned)
 
             if _is_ascii_box_diagram(body):

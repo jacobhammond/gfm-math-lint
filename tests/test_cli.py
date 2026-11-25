@@ -460,3 +460,41 @@ def test_cli_check_fix_shell_verify_json_output(tmp_path: Path, capsys: pytest.C
     assert shell_data["command"] == "check-shell"
     assert shell_data["summary"]["total_violations"] == 1
     assert shell_data["files"][0]["violations"][0]["rule_id"] == "GFM-S01"
+
+
+def test_cli_check_diff_json_and_verify_json_edge_cases(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    import json
+    from unittest.mock import patch
+
+    md = tmp_path / "doc.md"
+    md.write_text("```math\nx = 1\n```\n", encoding="utf-8")
+
+    # check --diff --format json (without --fix) must report modified=False on disk
+    ret_diff = main(["check", "--diff", "--format", "json", str(md)])
+    assert ret_diff == 1
+    diff_data = json.loads(capsys.readouterr().out)
+    assert diff_data["command"] == "check"
+    assert diff_data["summary"]["files_modified"] == 0
+    assert diff_data["files"][0]["modified"] is False
+    assert diff_data["files"][0]["would_modify"] is True
+    assert diff_data["files"][0]["fixed_violations"] == []
+    assert "--- a/" in diff_data["files"][0]["diff"]
+
+    # verify - --stdout --format json (HTML on stdout, JSON on stderr, with VerificationIssue)
+    with patch("sys.stdin.read", return_value="the base-$e$ error\n"):
+        ret_stdin = main(["verify", "--no-katex", "--stdout", "--format", "json", "-"])
+        assert ret_stdin == 1
+        captured = capsys.readouterr()
+        assert "<p>the base-$e$ error</p>" in captured.out
+        stdin_json = json.loads(captured.err)
+        assert stdin_json["command"] == "verify"
+        assert stdin_json["summary"]["errors"] >= 1
+        assert stdin_json["files"][0]["file"] == "<stdin>"
+
+    # verify --format json on empty directory
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    assert main(["verify", "--no-katex", "--format", "json", str(empty_dir)]) == 0
+    empty_json = json.loads(capsys.readouterr().out)
+    assert empty_json["summary"]["files_verified"] == 0
+    assert empty_json["files"] == []

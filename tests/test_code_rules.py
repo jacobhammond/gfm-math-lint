@@ -1,4 +1,4 @@
-"""Unit tests for GFM code block and inline code rules (GFM-C01, GFM-C02)."""
+"""Unit tests for GFM code block and inline code rules (GFM-C01, GFM-C02, GFM-C03)."""
 
 from __future__ import annotations
 
@@ -91,3 +91,37 @@ def test_rule_c03_negative_controls_and_suppression() -> None:
     suppressed = "<!-- gfm-math-lint-disable GFM-C03 -->\n```\ndU/dt = -\u03b3 U\n```\n"
     res = Linter().lint_string(suppressed, fix=False)
     assert not any(v.rule_id == "GFM-C03" for v in res.violations)
+
+
+def test_rule_c03_ignores_ascii_tables_and_windows_paths() -> None:
+    rule = RuleC03()
+    clean = (
+        "```\n"
+        "+----+------+\n"
+        "| id | name |\n"
+        "+----+------+\n"
+        "| 1  | test |\n"
+        "+----+------+\n"
+        "```\n\n"
+        "```\n"
+        "\u250c\u2500\u2500\u252c\u2500\u2500\u2510\n"
+        "\u2502A \u2502B \u2502\n"
+        "\u2514\u2500\u2500\u2534\u2500\u2500\u2518\n"
+        "```\n\n"
+        "```text\n"
+        "C:\\text\\notes.txt\n"
+        "> prompt_x = 1\n"
+        "```\n"
+    )
+    lines = clean.splitlines(keepends=True)
+    zones = scan_document_zones(lines)
+    assert rule.check(lines, zones) == []
+
+
+def test_rule_c03_ascii_box_with_arrow_and_info_attributes() -> None:
+    rule = RuleC03()
+    bad = '```\n+---+   +---+\n| A |-->| B |\n+---+   +---+\n```\n\n```text title="eq"\n\\lambda + \\pi\n```\n'
+    lines = bad.splitlines(keepends=True)
+    zones = scan_document_zones(lines)
+    violations = rule.check(lines, zones)
+    assert len(violations) == 2

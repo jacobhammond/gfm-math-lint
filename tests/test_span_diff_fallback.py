@@ -40,3 +40,37 @@ def test_span_diff_telemetry_on_clean_and_fixed_document() -> None:
     assert clean.span_diff.intended_count == 1
     assert clean.span_diff.received_count == 1
     assert clean.span_diff.diffs == []
+
+
+def test_span_diff_fallback_same_line_mixed_spans_and_safefix_guard() -> None:
+    # Line has BOTH GFM-M05 ($x\,y$) AND unexplained ($a\#b$).
+    # GFM-E01 must still be emitted for $a\#b$, and fix=True must fix GFM-M05 without rolling back!
+    doc = r"Both $x\,y$ and $a\#b$ here." + "\n"
+    res_check = Linter().lint_string(doc, fix=False)
+    rule_ids = {v.rule_id for v in res_check.violations}
+    assert "GFM-M05" in rule_ids
+    assert "GFM-E01" in rule_ids
+
+    res_fix = Linter().lint_string(doc, fix=True)
+    assert res_fix.modified is True
+    assert r"\thinspace" in res_fix.fixed_content
+    assert any(v.rule_id == "GFM-E01" for v in res_fix.remaining_violations)
+
+
+def test_span_diff_fallback_display_math_m18_does_not_mask_unexplained_diff() -> None:
+    # GFM-M18 (non-ascii µ) is NOT a CommonMark-mutation explainer, so GFM-E01 still flags \#
+    doc = "$$\n\\text{µm} + a\\#b\n$$\n"
+    res = Linter().lint_string(doc, fix=False)
+    rule_ids = {v.rule_id for v in res.violations}
+    assert "GFM-M18" in rule_ids
+    assert "GFM-E01" in rule_ids
+
+
+def test_span_diff_fallback_respects_config_ignore_and_rule_map() -> None:
+    from gfm_math_lint.rules import get_rule_by_id
+
+    assert get_rule_by_id("GFM-E01") is not None
+
+    # Ignoring GFM-M05 via config must not cause GFM-E01 to override the user's ignore
+    res = Linter(config=LintConfig(ignore=["GFM-M05"])).lint_string(r"$x\,y$" + "\n", fix=False)
+    assert res.violations == []

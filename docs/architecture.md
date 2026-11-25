@@ -119,7 +119,7 @@ src/gfm_math_lint/
 ├── emulator.py         # Zero-dependency CommonMark math escape, flanking & span-diff emulator
 ├── fixer.py            # Reverse-offset edit algebra and unified diff generator
 ├── latex.py            # Zero-dependency LaTeX structural validator & optional KaTeX strict runner
-├── linter.py           # Orchestrator running rules against tokenized documents
+├── linter.py           # Orchestrator, GFM-E01 span-diff fallback, and JSON serialization
 ├── probe.py            # Synthetic GitHub /markdown API calibrator (P1-P11)
 ├── py.typed            # PEP 561 type annotation marker
 ├── tokenizer.py        # 8-zone lexical state machine and line scanner
@@ -127,7 +127,7 @@ src/gfm_math_lint/
 └── rules/              # Modular rule implementations
     ├── __init__.py     # Registry of active rules
     ├── base.py         # Abstract base classes: Rule, Violation, Severity
-    ├── code_rules.py   # Fence nesting and inline code backtick rules (GFM-C**)
+    ├── code_rules.py   # Fence nesting, inline backticks, and plain-fence math/diagrams (GFM-C01..C03)
     ├── diagram_rules.py# Mermaid syntax and fence symmetry rules (GFM-D**)
     ├── math_rules.py   # LaTeX, KaTeX, and MathJax rendering rules (GFM-M**)
     ├── shell_rules.py  # Unsafe shell argument scanner (GFM-S**)

@@ -24,9 +24,9 @@ from gfm_math_lint import Linter, LintConfig
 # Initialize with default configuration
 linter = Linter()
 
-# Or initialize with explicit configuration
+# Or initialize with explicit configuration and optional span-diff fallback toggle
 config = LintConfig(ignore=["GFM-M10"])
-linter = Linter(config=config)
+linter = Linter(config=config, enable_span_diff_fallback=True)
 ```
 
 #### Methods:

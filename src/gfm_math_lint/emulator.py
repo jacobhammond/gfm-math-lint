@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from gfm_math_lint.tokenizer import InlineSpan, Zone, scan_document_zones, scan_inline_spans
+from gfm_math_lint.tokenizer import DocumentZone, InlineSpan, Zone, scan_document_zones, scan_inline_spans
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -31,6 +31,7 @@ class MathSpan:
     delimiter: str
     line: int
     col: int = 1
+    end_col: int = 0
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,8 @@ class SpanDiff:
     received: str = ""
     line: int = 0
     display: bool = False
+    col: int = 1
+    end_col: int = 0
 
 
 @dataclass
@@ -175,13 +178,16 @@ def _strip_display_math_zone(lines: list[str], parent_block: str | None) -> list
     return [_BQ_PREFIX_RE.sub("", ln) if (is_bq or ln.lstrip().startswith(">")) else ln for ln in inner]
 
 
-def extract_intended_math_spans(markdown_content: str) -> list[MathSpan]:
+def extract_intended_math_spans(
+    markdown_content: str,
+    zones: list[DocumentZone] | None = None,
+) -> list[MathSpan]:
     """Extract all math spans the author intended in `markdown_content`."""
-    lines = markdown_content.splitlines(keepends=True)
-    if not lines:
-        return []
-
-    zones = scan_document_zones(lines)
+    if zones is None:
+        lines = markdown_content.splitlines(keepends=True)
+        if not lines:
+            return []
+        zones = scan_document_zones(lines)
     spans_out: list[MathSpan] = []
 
     for zone in zones:
@@ -244,6 +250,7 @@ def extract_intended_math_spans(markdown_content: str) -> list[MathSpan]:
                                     delimiter=sp.delimiter,
                                     line=line_no,
                                     col=sp.start_col,
+                                    end_col=sp.end_col,
                                 )
                             )
 
@@ -316,6 +323,8 @@ def compare_math_spans(
                         received="",
                         line=exp.line,
                         display=exp.display,
+                        col=exp.col,
+                        end_col=exp.end_col,
                     )
                 )
         elif tag == "replace":
@@ -329,6 +338,8 @@ def compare_math_spans(
                         received=_norm_math(got.content),
                         line=exp.line,
                         display=exp.display,
+                        col=exp.col,
+                        end_col=exp.end_col,
                     )
                 )
             for exp in intended[i1 + n_pair : i2]:
@@ -340,23 +351,30 @@ def compare_math_spans(
                         received="",
                         line=exp.line,
                         display=exp.display,
+                        col=exp.col,
+                        end_col=exp.end_col,
                     )
                 )
 
     return diffs
 
 
-def emulate_gfm_document(markdown_content: str) -> EmulationResult:
+def emulate_gfm_document(
+    markdown_content: str,
+    zones: list[DocumentZone] | None = None,
+) -> EmulationResult:
     """Emulate GitHub's CommonMark + MathJax preprocessing locally with zero dependencies."""
-    intended_spans = extract_intended_math_spans(markdown_content)
-    received_spans: list[MathSpan] = []
-    html_parts: list[str] = []
-
-    lines = markdown_content.splitlines(keepends=True)
-    if not lines:
+    if zones is None:
+        lines = markdown_content.splitlines(keepends=True)
+        if not lines:
+            return EmulationResult(intended_spans=[], received_spans=[], rendered_html="", diffs=[])
+        zones = scan_document_zones(lines)
+    if not zones:
         return EmulationResult(intended_spans=[], received_spans=[], rendered_html="", diffs=[])
 
-    zones = scan_document_zones(lines)
+    intended_spans = extract_intended_math_spans(markdown_content, zones=zones)
+    received_spans: list[MathSpan] = []
+    html_parts: list[str] = []
 
     def _render_inline_line(
         line_text: str,
