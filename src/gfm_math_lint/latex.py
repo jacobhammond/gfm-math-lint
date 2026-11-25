@@ -41,6 +41,16 @@ _VALID_NAMED_DELIMITERS: frozenset[str] = frozenset(
         "rgroup",
         "lmoustache",
         "rmoustache",
+        "lbrack",
+        "rbrack",
+        "lt",
+        "gt",
+        "llbracket",
+        "rrbracket",
+        "lang",
+        "rang",
+        "lBrace",
+        "rBrace",
     }
 )
 _TEXT_MODE_COMMANDS: frozenset[str] = frozenset({"text", "textrm", "textit", "textbf", "texttt", "textsf"})
@@ -68,16 +78,30 @@ class KaTeXDiagnostic:
     warnings: list[str] = field(default_factory=list)
 
 
-def _skip_ws(tex: str, pos: int) -> int:
+@dataclass
+class _TextModeFrame:
+    brace_depth: int
+    in_math: bool = False
+
+
+def _skip_ws_and_comments(tex: str, pos: int) -> int:
     n = len(tex)
-    while pos < n and tex[pos].isspace():
-        pos += 1
+    while pos < n:
+        if tex[pos].isspace():
+            pos += 1
+        elif tex[pos] == "%":
+            nl = tex.find("\n", pos)
+            if nl == -1:
+                return n
+            pos = nl + 1
+        else:
+            break
     return pos
 
 
 def _read_braced_name(tex: str, pos: int) -> tuple[str | None, int]:
-    """Read a `{name}` argument starting after optional whitespace, or return (None, pos)."""
-    p = _skip_ws(tex, pos)
+    """Read a `{name}` argument starting after optional whitespace/comments, or return (None, pos)."""
+    p = _skip_ws_and_comments(tex, pos)
     n = len(tex)
     if p >= n or tex[p] != "{":
         return None, pos
@@ -89,7 +113,7 @@ def _read_braced_name(tex: str, pos: int) -> tuple[str | None, int]:
 
 def _consume_delimiter(tex: str, pos: int) -> tuple[bool, int]:
     """Check and consume a valid \\left / \\right delimiter token starting at `pos`."""
-    p = _skip_ws(tex, pos)
+    p = _skip_ws_and_comments(tex, pos)
     n = len(tex)
     if p >= n:
         return False, pos
@@ -115,7 +139,7 @@ def _consume_delimiter(tex: str, pos: int) -> tuple[bool, int]:
 
 def _consume_single_arg(tex: str, pos: int) -> tuple[bool, int]:
     """Consume one TeX macro argument (braced group, control sequence, or single token)."""
-    p = _skip_ws(tex, pos)
+    p = _skip_ws_and_comments(tex, pos)
     n = len(tex)
     if p >= n or tex[p] == "}":
         return False, pos
@@ -154,13 +178,11 @@ def _consume_single_arg(tex: str, pos: int) -> tuple[bool, int]:
 
 def _skip_script_arg_end(tex: str, pos: int) -> int | None:
     """Return the index immediately after a subscript/superscript argument, or None if dangling."""
-    p = _skip_ws(tex, pos)
+    p = _skip_ws_and_comments(tex, pos)
     n = len(tex)
     if p >= n or tex[p] in ("}", "&"):
         return None
     if tex.startswith("\\\\", p):
-        return None
-    if tex[p] == "%":
         return None
     ok, end_pos = _consume_single_arg(tex, p)
     return end_pos if ok else None
@@ -184,34 +206,32 @@ def validate_latex(tex: str, display: bool = False) -> list[LaTeXIssue]:
     brace_stack: list[int] = []
     env_stack: list[tuple[str, int]] = []
     left_stack: list[int] = []
-    text_mode_depths: list[int] = []
-    in_nested_text_math = False
-    # Tracks (brace_depth, op_char, end_offset) for immediate double-script detection
-    pending_script: tuple[int, str, int] | None = None
+    text_mode_stack: list[_TextModeFrame] = []
+    # Tracks per-brace-depth script operators seen on the current atom, and arg end offset
+    atom_scripts: dict[int, set[str]] = {}
+    script_arg_until: dict[int, int] = {}
 
     while i < n:
         ch = tex[i]
+        depth = len(brace_stack)
+        in_text_mode = bool(text_mode_stack) and not text_mode_stack[-1].in_math
 
-        if pending_script is not None and i >= pending_script[2]:
-            if ch.isspace():
-                i += 1
-                continue
-            if ch in ("_", "^") and len(brace_stack) == pending_script[0]:
-                if ch == pending_script[1]:
-                    kind = "subscript" if ch == "_" else "superscript"
-                    issues.append(
-                        LaTeXIssue(
-                            category="latex-syntax",
-                            message=f"Double {kind} '{ch}' on the same base token.",
-                            math_content=tex,
-                            display_mode=display,
-                            offset=i,
-                        )
-                    )
-                # Different script (e.g. x_1^2) is valid; clear before processing this operator
-                pending_script = None
-            else:
-                pending_script = None
+        if ch.isspace():
+            i += 1
+            continue
+
+        # 2. TeX comment '%'
+        if ch == "%":
+            nl = tex.find("\n", i)
+            if nl == -1:
+                break
+            i = nl + 1
+            continue
+
+        # Clear atom script state at `depth` when a non-script token arrives after the script arg
+        if ch not in ("_", "^") and i >= script_arg_until.get(depth, -1):
+            atom_scripts.pop(depth, None)
+            script_arg_until.pop(depth, None)
 
         # 1. Backslash sequences
         if ch == "\\":
@@ -307,10 +327,10 @@ def validate_latex(tex: str, display: bool = False) -> list[LaTeXIssue]:
                     i = next_pos if has_delim else j
                     continue
                 elif cmd in _TEXT_MODE_COMMANDS:
-                    p = _skip_ws(tex, j)
+                    p = _skip_ws_and_comments(tex, j)
                     if p < n and tex[p] == "{":
                         brace_stack.append(p)
-                        text_mode_depths.append(len(brace_stack))
+                        text_mode_stack.append(_TextModeFrame(brace_depth=len(brace_stack), in_math=False))
                         i = p + 1
                         continue
                 elif cmd in _FRAC_COMMANDS:
@@ -332,14 +352,6 @@ def validate_latex(tex: str, display: bool = False) -> list[LaTeXIssue]:
             i += 2 if i + 1 < n else 1
             continue
 
-        # 2. TeX comment '%'
-        if ch == "%":
-            nl = tex.find("\n", i)
-            if nl == -1:
-                break
-            i = nl + 1
-            continue
-
         # 3. Braces
         if ch == "{":
             brace_stack.append(i)
@@ -359,22 +371,23 @@ def validate_latex(tex: str, display: bool = False) -> list[LaTeXIssue]:
                 )
             else:
                 closing_depth = len(brace_stack)
+                atom_scripts.pop(closing_depth, None)
+                script_arg_until.pop(closing_depth, None)
                 brace_stack.pop()
-                if text_mode_depths and text_mode_depths[-1] == closing_depth:
-                    text_mode_depths.pop()
-                    in_nested_text_math = False
+                if text_mode_stack and text_mode_stack[-1].brace_depth == closing_depth:
+                    text_mode_stack.pop()
             i += 1
             continue
 
         # 4. Nested $ inside \text{...}
-        if ch == "$" and text_mode_depths:
-            in_nested_text_math = not in_nested_text_math
+        if ch == "$" and text_mode_stack:
+            text_mode_stack[-1].in_math = not text_mode_stack[-1].in_math
             i += 1
             continue
 
         # 5. Subscripts & Superscripts
         if ch in ("_", "^"):
-            if text_mode_depths and not in_nested_text_math:
+            if in_text_mode:
                 if ch == "_":
                     issues.append(
                         LaTeXIssue(
@@ -388,20 +401,35 @@ def validate_latex(tex: str, display: bool = False) -> list[LaTeXIssue]:
                 i += 1
                 continue
 
-            arg_end = _skip_script_arg_end(tex, i + 1)
-            if arg_end is None:
-                kind = "subscript" if ch == "_" else "superscript"
-                issues.append(
-                    LaTeXIssue(
-                        category="latex-syntax",
-                        message=f"Dangling {kind} operator '{ch}' with missing argument.",
-                        math_content=tex,
-                        display_mode=display,
-                        offset=i,
+            if i >= script_arg_until.get(depth, -1):
+                seen = atom_scripts.setdefault(depth, set())
+                if ch in seen:
+                    kind = "subscript" if ch == "_" else "superscript"
+                    issues.append(
+                        LaTeXIssue(
+                            category="latex-syntax",
+                            message=f"Double {kind} '{ch}' on the same base token.",
+                            math_content=tex,
+                            display_mode=display,
+                            offset=i,
+                        )
                     )
-                )
-            else:
-                pending_script = (len(brace_stack), ch, arg_end)
+                else:
+                    seen.add(ch)
+                arg_end = _skip_script_arg_end(tex, i + 1)
+                if arg_end is None:
+                    kind = "subscript" if ch == "_" else "superscript"
+                    issues.append(
+                        LaTeXIssue(
+                            category="latex-syntax",
+                            message=f"Dangling {kind} operator '{ch}' with missing argument.",
+                            math_content=tex,
+                            display_mode=display,
+                            offset=i,
+                        )
+                    )
+                else:
+                    script_arg_until[depth] = arg_end
             i += 1
             continue
 
@@ -455,7 +483,7 @@ def _get_node_env() -> dict[str, str]:
     current_node_path = env.get("NODE_PATH", "")
     if current_node_path:
         candidate_paths.insert(0, current_node_path)
-    env["NODE_PATH"] = ":".join(p for p in candidate_paths if p)
+    env["NODE_PATH"] = os.pathsep.join(p for p in candidate_paths if p)
     return env
 
 

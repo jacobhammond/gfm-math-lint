@@ -126,8 +126,27 @@ def test_verify_markdown_surfaces_katex_strict_warnings() -> None:
         warnings=["unknownSymbol: Unrecognized 'µ'"],
     )
     with patch("gfm_math_lint.verifier.run_local_katex_verification", return_value=[fake_diag]):
-        report = verify_markdown_detailed(r"$\text{µm}$", use_katex=True, strict_katex=True)
-        assert any(i.category == "katex-warning" and "unknownSymbol" in i.message for i in report.issues)
+        report_warn = verify_markdown_detailed(r"$\text{µm}$", use_katex=True, strict_katex=False)
+        warn_issues = [i for i in report_warn.issues if i.category == "katex-warning"]
+        assert len(warn_issues) == 1
+        assert warn_issues[0].severity == "warning"
+
+        report_err = verify_markdown_detailed(r"$\text{µm}$", use_katex=True, strict_katex=True)
+        err_issues = [i for i in report_err.issues if i.category == "katex-warning"]
+        assert len(err_issues) == 1
+        assert err_issues[0].severity == "error"
+
+
+def test_verify_currency_range_clean_and_preview_populated(tmp_path: Path) -> None:
+    fake_png = tmp_path / "previews" / "diagram_mermaid_01.png"
+    with patch("gfm_math_lint.verifier.render_mermaid_previews", return_value=[fake_png]):
+        report = verify_markdown_detailed(
+            "The price is $10-$20.\n\n```mermaid\ngraph TD\n    A --> B\n```\n",
+            use_katex=False,
+            preview_dir=tmp_path / "previews",
+        )
+        assert report.issues == []
+        assert report.mermaid_previews == [fake_png]
 
 
 def test_cmd_verify_clean(tmp_path: Path) -> None:

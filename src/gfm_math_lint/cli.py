@@ -19,7 +19,6 @@ from gfm_math_lint.linter import (
     format_violation_text,
 )
 from gfm_math_lint.probe import run_probes
-from gfm_math_lint.rules.diagram_rules import render_mermaid_previews
 from gfm_math_lint.rules.shell_rules import RuleS01
 from gfm_math_lint.verifier import (
     build_preview_html,
@@ -140,6 +139,16 @@ def get_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument(
         "--preview-dir",
         help="Directory to render high-DPI PNG previews of Mermaid diagrams via mmdc",
+    )
+    verify_parser.add_argument(
+        "--no-katex",
+        action="store_true",
+        help="Disable optional local Node.js KaTeX validation",
+    )
+    verify_parser.add_argument(
+        "--strict-katex",
+        action="store_true",
+        help="Treat KaTeX strict warnings (e.g. unknownSymbol) as verification errors",
     )
     verify_parser.add_argument("--html", help="Path to write rendered HTML preview document")
     verify_parser.add_argument("--browser", action="store_true", help="Open rendered preview in web browser")
@@ -453,10 +462,22 @@ def cmd_comment(args: argparse.Namespace) -> int:
         return 2
 
 
+def _preview_stem_for_path(file_path: Path, root_dir: Path) -> str:
+    """Build a collision-free preview filename stem from a file's path relative to `root_dir`."""
+    try:
+        rel = file_path.resolve().relative_to(root_dir.resolve())
+    except ValueError:
+        rel = file_path
+    parts = [p for p in rel.with_suffix("").parts if p not in (".", "..", "")]
+    return "__".join(parts) if parts else file_path.stem
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """Execute 'verify' subcommand."""
     is_stdout = getattr(args, "stdout", False)
     is_remote = getattr(args, "remote", False)
+    use_katex = not getattr(args, "no_katex", False)
+    strict_katex = getattr(args, "strict_katex", False)
     preview_dir_arg = getattr(args, "preview_dir", None)
     preview_dir = Path(preview_dir_arg) if preview_dir_arg else None
     diag_stream = sys.stderr if is_stdout else sys.stdout
@@ -484,6 +505,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 token=args.token,
                 stdout=is_stdout,
                 remote=is_remote,
+                use_katex=use_katex,
+                strict_katex=strict_katex,
+                preview_dir=preview_dir,
+                preview_stem="stdin",
             )
         except Exception as e:
             sys.stderr.write(f"Error verifying <stdin>: {e}\n")
@@ -491,22 +516,21 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
         diag_stream.write(f"<stdin>: Recognized {report.received_count}/{report.intended_count} math spans\n")
 
+        error_count = 0
         for issue in report.issues:
+            if issue.severity != "warning":
+                error_count += 1
             if args.format == "github":
                 file_esc = _escape_workflow_property("<stdin>")
                 cat_esc = _escape_workflow_property(issue.category)
                 msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
-                diag_stream.write(f"::error file={file_esc},title={cat_esc}::{msg_esc}\n")
+                level = "warning" if issue.severity == "warning" else "error"
+                diag_stream.write(f"::{level} file={file_esc},title={cat_esc}::{msg_esc}\n")
             else:
                 diag_stream.write(f"<stdin>: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
 
-        if preview_dir is not None:
-            try:
-                written = render_mermaid_previews(content, preview_dir, stem="stdin")
-                diag_stream.write(f"Rendered {len(written)} Mermaid preview(s) to {preview_dir}\n")
-            except RuntimeError as e:
-                sys.stderr.write(f"Error rendering Mermaid previews: {e}\n")
-                return 2
+        if report.mermaid_previews:
+            diag_stream.write(f"Rendered {len(report.mermaid_previews)} Mermaid preview(s) to {preview_dir}\n")
 
         if args.html:
             out_path = Path(args.html)
@@ -518,8 +542,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
             opened_path = open_in_browser(report.rendered_html, title="GFM Math Verification")
             diag_stream.write(f"Opened preview in browser ({opened_path})\n")
 
-        if len(report.issues) > 0:
-            sys.stderr.write(f"Verification failed: {len(report.issues)} rendering anomaly(ies) detected.\n")
+        if error_count > 0:
+            sys.stderr.write(f"Verification failed: {error_count} rendering anomaly(ies) detected.\n")
             return 1
 
         diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")
@@ -549,12 +573,21 @@ def cmd_verify(args: argparse.Namespace) -> int:
     else:
         diag_stream.write(f"Auditing {len(filtered_files)} file(s) locally (offline emulator)...\n")
 
-    total_issues = 0
+    total_errors = 0
     all_html_chunks: list[str] = []
 
     for file_path in filtered_files:
         try:
-            report = verify_file_detailed(file_path, token=args.token, stdout=is_stdout, remote=is_remote)
+            report = verify_file_detailed(
+                file_path,
+                token=args.token,
+                stdout=is_stdout,
+                remote=is_remote,
+                use_katex=use_katex,
+                strict_katex=strict_katex,
+                preview_dir=preview_dir,
+                preview_stem=_preview_stem_for_path(file_path, root_dir),
+            )
         except Exception as e:
             sys.stderr.write(f"Error verifying {file_path}: {e}\n")
             return 2
@@ -563,25 +596,21 @@ def cmd_verify(args: argparse.Namespace) -> int:
         diag_stream.write(f"{file_path}: Recognized {report.received_count}/{report.intended_count} math spans\n")
 
         for issue in report.issues:
+            if issue.severity != "warning":
+                total_errors += 1
             if args.format == "github":
                 file_esc = _escape_workflow_property(str(file_path))
                 cat_esc = _escape_workflow_property(issue.category)
                 msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
-                diag_stream.write(f"::error file={file_esc},title={cat_esc}::{msg_esc}\n")
+                level = "warning" if issue.severity == "warning" else "error"
+                diag_stream.write(f"::{level} file={file_esc},title={cat_esc}::{msg_esc}\n")
             else:
                 diag_stream.write(f"{file_path}: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
 
-        total_issues += len(report.issues)
-
-        if preview_dir is not None:
-            try:
-                file_text = file_path.read_text(encoding="utf-8")
-                written = render_mermaid_previews(file_text, preview_dir, stem=file_path.stem)
-                if written:
-                    diag_stream.write(f"Rendered {len(written)} Mermaid preview(s) for {file_path} to {preview_dir}\n")
-            except RuntimeError as e:
-                sys.stderr.write(f"Error rendering Mermaid previews for {file_path}: {e}\n")
-                return 2
+        if report.mermaid_previews:
+            diag_stream.write(
+                f"Rendered {len(report.mermaid_previews)} Mermaid preview(s) for {file_path} to {preview_dir}\n"
+            )
 
     combined_html = "\n<hr>\n".join(all_html_chunks)
 
@@ -595,8 +624,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
         opened_path = open_in_browser(combined_html, title="GFM Math Verification")
         diag_stream.write(f"Opened preview in browser ({opened_path})\n")
 
-    if total_issues > 0:
-        sys.stderr.write(f"Verification failed: {total_issues} rendering anomaly(ies) detected.\n")
+    if total_errors > 0:
+        sys.stderr.write(f"Verification failed: {total_errors} rendering anomaly(ies) detected.\n")
         return 1
 
     diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")

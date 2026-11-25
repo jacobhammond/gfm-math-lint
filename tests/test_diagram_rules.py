@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -309,33 +310,58 @@ def test_rule_d06_reports_syntax_error_and_skips_browser_missing() -> None:
     import subprocess
 
     rule = RuleD06()
-    content = "```mermaid\ngraph TD\n    A --->|bad|\n```\n"
+    content = "```mermaid\ngraph TD\n    A --->|bad|\n```\n\n```mermaid\ngraph LR\n    B --> C\n```\n"
     lines = content.splitlines(keepends=True)
     zones = scan_document_zones(lines)
 
     syntax_err = subprocess.CompletedProcess(
         args=["mmdc"], returncode=1, stdout=b"", stderr=b"Error: Parse error on line 2\n"
     )
+    ok_proc = subprocess.CompletedProcess(args=["mmdc"], returncode=0, stdout=b"", stderr=b"")
     with (
         patch("gfm_math_lint.rules.diagram_rules.find_mmdc_binary", return_value="/usr/bin/mmdc"),
-        patch("subprocess.run", return_value=syntax_err),
+        patch("subprocess.run", side_effect=[syntax_err, ok_proc]),
     ):
         violations = rule.check(lines, zones)
         assert len(violations) == 1
         assert violations[0].rule_id == "GFM-D06"
         assert "Parse error on line 2" in violations[0].message
 
+    # Timeout on first block continues to validate second block
+    with (
+        patch("gfm_math_lint.rules.diagram_rules.find_mmdc_binary", return_value="/usr/bin/mmdc"),
+        patch("subprocess.run", side_effect=[subprocess.TimeoutExpired("mmdc", 30), syntax_err]),
+    ):
+        violations_after_timeout = rule.check(lines, zones)
+        assert len(violations_after_timeout) == 1
+
+    # Browser-missing error breaks immediately without retrying remaining blocks
     browser_err = subprocess.CompletedProcess(
         args=["mmdc"], returncode=1, stdout=b"", stderr=b"Error: Could not find Chrome\n"
     )
     with (
         patch("gfm_math_lint.rules.diagram_rules.find_mmdc_binary", return_value="/usr/bin/mmdc"),
-        patch("subprocess.run", return_value=browser_err),
+        patch("subprocess.run", return_value=browser_err) as mock_run,
     ):
         assert rule.check(lines, zones) == []
+        assert mock_run.call_count == 1
 
 
-def test_build_puppeteer_config_and_preview_renderer(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_rule_d06_skipped_in_linter_intermediate_fix_passes() -> None:
+    from gfm_math_lint.linter import Linter
+    from gfm_math_lint.rules.math_rules import RuleM04
+
+    doc = "$ x $\n\n```mermaid\ngraph TD\n    A --> B\n```\n"
+    d06 = RuleD06()
+    linter = Linter(rules=[RuleM04(), d06])
+    with patch.object(d06, "check", return_value=[]) as mock_d06:
+        res = linter.lint_string(doc, fix=True)
+        assert res.modified is True
+        # Called once initially and once on final changed content (NOT in intermediate passes)
+        assert mock_d06.call_count == 2
+
+
+def test_build_puppeteer_config_and_preview_renderer(tmp_path: Path) -> None:
     import subprocess
 
     cfg = build_puppeteer_config(executable_path="/usr/bin/chrome-headless-shell")

@@ -84,3 +84,31 @@ def test_compare_math_spans_detects_escaped_underscore_in_text_macro() -> None:
     diffs = compare_math_spans(intended, received)
     assert len(diffs) == 1
     assert diffs[0].category == "span-mutated"
+
+
+def test_emulator_indented_display_math_and_many_dropped_spans() -> None:
+    indented_md = "$$\n\\begin{aligned}\n  a &= b \\\\\n  c &= d\n\\end{aligned}\n$$\n"
+    res = emulate_gfm_document(indented_md)
+    assert res.diffs == []
+
+    intended = [
+        MathSpan(content=x, display=False, delimiter="$", line=idx)
+        for idx, x in enumerate(["A", "B", "C", "D", "E"], 1)
+    ]
+    received = [MathSpan(content="E", display=False, delimiter="$", line=5)]
+    diffs = compare_math_spans(intended, received)
+    assert diffs[0].category == "span-count-mismatch"
+    dropped = [d for d in diffs if d.category == "span-dropped"]
+    assert [d.intended for d in dropped] == ["A", "B", "C", "D"]
+    assert not any(d.category == "span-mutated" for d in diffs)
+
+
+def test_emulator_currency_range_and_heading_blockquote_html() -> None:
+    res = emulate_gfm_document("# Heading $x_1$\n\n> Quote $y_2$\n\nThe price is $10-$20.\n")
+    assert len(res.intended_spans) == 2
+    assert len(res.received_spans) == 2
+    assert res.diffs == []
+    assert "<h1>Heading " in res.rendered_html
+    assert "<h1># " not in res.rendered_html
+    assert "<blockquote><p>Quote " in res.rendered_html
+    assert "<p>> " not in res.rendered_html

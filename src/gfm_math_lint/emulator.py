@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import html
 import re
 from dataclasses import dataclass, field
@@ -185,16 +186,20 @@ def extract_intended_math_spans(markdown_content: str) -> list[MathSpan]:
 
     for zone in zones:
         if zone.zone_type == Zone.DISPLAY_MATH:
-            inner_lines: list[str] = []
-            for idx, line in enumerate(zone.lines):
-                line_content = _BQ_PREFIX_RE.sub("", line).strip()
-                if idx == 0 and line_content.startswith("$$"):
-                    line_content = line_content[2:].strip()
-                if (idx == len(zone.lines) - 1 or len(zone.lines) == 1) and line_content.endswith("$$"):
-                    line_content = line_content[:-2].strip()
-                if line_content:
-                    inner_lines.append(line_content)
-            display_content = "\n".join(inner_lines).strip()
+            if zone.is_closed and len(zone.lines) >= 2:
+                stripped_inner = _strip_display_math_zone(zone.lines, zone.parent_block)
+                display_content = "".join(stripped_inner).strip()
+            else:
+                inner_lines: list[str] = []
+                for idx, line in enumerate(zone.lines):
+                    line_content = _BQ_PREFIX_RE.sub("", line).rstrip("\r\n")
+                    if idx == 0 and line_content.lstrip().startswith("$$"):
+                        line_content = line_content.lstrip()[2:]
+                    if (idx == len(zone.lines) - 1 or len(zone.lines) == 1) and line_content.rstrip().endswith("$$"):
+                        line_content = line_content.rstrip()[:-2]
+                    if line_content.strip():
+                        inner_lines.append(line_content)
+                display_content = "\n".join(inner_lines).strip()
             if display_content:
                 spans_out.append(
                     MathSpan(
@@ -268,6 +273,13 @@ def _spans_equivalent(intended: MathSpan, received: MathSpan, allow_underscore_u
     )
 
 
+def _canonical_span_key(span: MathSpan, allow_underscore_unescape: bool) -> str:
+    norm = _norm_math(span.content)
+    if allow_underscore_unescape and not _has_escaped_underscore_in_text_macro(norm):
+        return norm.replace(r"\_", "_")
+    return norm
+
+
 def compare_math_spans(
     intended: list[MathSpan],
     received: list[MathSpan],
@@ -286,47 +298,16 @@ def compare_math_spans(
                 ),
             )
         )
-        i = 0
-        j = 0
-        while i < len(intended):
-            exp = intended[i]
-            if j < len(received):
-                got = received[j]
-                if _spans_equivalent(exp, got, allow_underscore_unescape):
-                    i += 1
-                    j += 1
-                    continue
-                # Look ahead in intended to see if `exp` was dropped
-                found_later = any(
-                    _spans_equivalent(intended[k], got, allow_underscore_unescape)
-                    for k in range(i + 1, min(i + 4, len(intended)))
-                )
-                if found_later:
-                    diffs.append(
-                        SpanDiff(
-                            category="span-dropped",
-                            message=f"Math span at line {exp.line} was not recognized as math by GFM.",
-                            intended=_norm_math(exp.content),
-                            received="",
-                            line=exp.line,
-                            display=exp.display,
-                        )
-                    )
-                    i += 1
-                    continue
-                diffs.append(
-                    SpanDiff(
-                        category="span-mutated",
-                        message=f"Math span at line {exp.line} mutated during CommonMark processing.",
-                        intended=_norm_math(exp.content),
-                        received=_norm_math(got.content),
-                        line=exp.line,
-                        display=exp.display,
-                    )
-                )
-                i += 1
-                j += 1
-            else:
+
+    exp_keys = [_canonical_span_key(s, allow_underscore_unescape) for s in intended]
+    got_keys = [_norm_math(s.content) for s in received]
+    matcher = difflib.SequenceMatcher(None, exp_keys, got_keys, autojunk=False)
+
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        if tag == "delete":
+            for exp in intended[i1:i2]:
                 diffs.append(
                     SpanDiff(
                         category="span-dropped",
@@ -337,21 +318,30 @@ def compare_math_spans(
                         display=exp.display,
                     )
                 )
-                i += 1
-        return diffs
-
-    for exp, got in zip(intended, received, strict=True):
-        if not _spans_equivalent(exp, got, allow_underscore_unescape):
-            diffs.append(
-                SpanDiff(
-                    category="span-mutated",
-                    message=f"Math span at line {exp.line} mutated during CommonMark processing.",
-                    intended=_norm_math(exp.content),
-                    received=_norm_math(got.content),
-                    line=exp.line,
-                    display=exp.display,
+        elif tag == "replace":
+            n_pair = min(i2 - i1, j2 - j1)
+            for exp, got in zip(intended[i1 : i1 + n_pair], received[j1 : j1 + n_pair], strict=True):
+                diffs.append(
+                    SpanDiff(
+                        category="span-mutated",
+                        message=f"Math span at line {exp.line} mutated during CommonMark processing.",
+                        intended=_norm_math(exp.content),
+                        received=_norm_math(got.content),
+                        line=exp.line,
+                        display=exp.display,
+                    )
                 )
-            )
+            for exp in intended[i1 + n_pair : i2]:
+                diffs.append(
+                    SpanDiff(
+                        category="span-dropped",
+                        message=f"Math span at line {exp.line} was not recognized as math by GFM.",
+                        intended=_norm_math(exp.content),
+                        received="",
+                        line=exp.line,
+                        display=exp.display,
+                    )
+                )
 
     return diffs
 
@@ -523,15 +513,32 @@ def emulate_gfm_document(markdown_content: str) -> EmulationResult:
             raw_prose = zone.content.rstrip("\r\n")
             if not raw_prose.strip():
                 continue
-            rendered_line = _render_inline_line(
-                raw_prose,
-                zone.start_line,
-                indent_level=zone.indent_level,
-                parent_block=zone.parent_block,
-            )
-            if raw_prose.lstrip().startswith("#"):
-                html_parts.append(f"<h1>{rendered_line}</h1>")
+            m_heading = re.match(r"^\s{0,3}(#{1,6})\s+(.*)$", raw_prose)
+            if m_heading:
+                level = len(m_heading.group(1))
+                rendered_body = _render_inline_line(
+                    m_heading.group(2),
+                    zone.start_line,
+                    indent_level=zone.indent_level,
+                    parent_block=zone.parent_block,
+                )
+                html_parts.append(f"<h{level}>{rendered_body}</h{level}>")
+            elif raw_prose.lstrip().startswith(">"):
+                bq_body = re.sub(r"^\s*(?:>\s?)+", "", raw_prose)
+                rendered_body = _render_inline_line(
+                    bq_body,
+                    zone.start_line,
+                    indent_level=zone.indent_level,
+                    parent_block=zone.parent_block,
+                )
+                html_parts.append(f"<blockquote><p>{rendered_body}</p></blockquote>")
             else:
+                rendered_line = _render_inline_line(
+                    raw_prose,
+                    zone.start_line,
+                    indent_level=zone.indent_level,
+                    parent_block=zone.parent_block,
+                )
                 html_parts.append(f"<p>{rendered_line}</p>")
 
     rendered_html = "\n".join(html_parts)

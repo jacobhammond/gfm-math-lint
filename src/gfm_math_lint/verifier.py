@@ -26,6 +26,7 @@ from gfm_math_lint.emulator import (
     extract_intended_math_spans,
 )
 from gfm_math_lint.latex import run_local_katex_verification, validate_latex
+from gfm_math_lint.rules.diagram_rules import render_mermaid_previews
 
 
 @dataclass
@@ -36,6 +37,7 @@ class VerificationIssue:
     message: str
     snippet: str
     file_path: str = ""
+    severity: str = "error"
 
 
 @dataclass
@@ -59,7 +61,7 @@ _MATH_SYNTAX_RE = re.compile(
     r"\$[^\$\n]*[=<>\\+\\-][^\$\n]*\$|"  # inline math containing operators
     r"\$[0-9.]+\$|"  # inline number math like $0.759$ or $3.6$
     r"\$[^\$\s]+\$[a-zA-Z]|"  # closing delimiter glued to unit like $0.759$dB or $15\ ^\circ$C
-    r"[-/\u2013\u2014]\$[a-zA-Z0-9]|"  # hyphen/dash/slash followed by opening math delimiter
+    r"[-/\u2013\u2014]\$[a-zA-Z0-9][^\$\n]*\$|"  # hyphen/dash/slash followed by opening math delimiter
     r"\$[a-zA-Z]\$|"  # single-letter inline math ($x$, $V$)
     r"\\text\{|\\frac\{|\\sqrt\{|\\partial|\\alpha|\\beta|\\gamma|\\Delta|\\lambda|\\mu|\\pi)"  # LaTeX macro
 )
@@ -362,6 +364,12 @@ class GFMHTMLValidator(HTMLParser):
             return
         for match in _MATH_SYNTAX_RE.finditer(text):
             snippet = match.group(0).strip()
+            if (
+                re.fullmatch(r"\$\d+(?:,\d{3})*(?:\.\d{1,2})?[kKmMbB]?\s*[-/\u2013\u2014]\s*\$", snippet)
+                and match.end() < len(text)
+                and text[match.end()].isdigit()
+            ):
+                continue
             start = max(0, match.start() - 20)
             end = min(len(text), match.end() + 20)
             context_snippet = text[start:end].replace("\n", " ").strip()
@@ -680,7 +688,9 @@ def verify_markdown_detailed(
     stdout: bool = False,
     remote: bool = False,
     use_katex: bool = True,
-    strict_katex: bool = True,
+    strict_katex: bool = False,
+    preview_dir: Path | None = None,
+    preview_stem: str = "diagram",
 ) -> VerificationReport:
     """Verify markdown locally (default) or via GitHub API (--remote), returning a detailed report."""
     mode = "remote" if remote else "local"
@@ -725,7 +735,7 @@ def verify_markdown_detailed(
 
     if use_katex and received_spans:
         katex_blocks = [(s.content, s.display) for s in received_spans]
-        for diag in run_local_katex_verification(katex_blocks, strict_warnings=strict_katex):
+        for diag in run_local_katex_verification(katex_blocks, strict_warnings=True):
             if diag.error_message:
                 issues.append(
                     VerificationIssue(
@@ -733,6 +743,7 @@ def verify_markdown_detailed(
                         message=f"KaTeX ParseError: {diag.error_message}",
                         snippet=diag.math_content[:80],
                         file_path=file_path,
+                        severity="error",
                     )
                 )
             for warn in diag.warnings:
@@ -742,8 +753,13 @@ def verify_markdown_detailed(
                         message=f"KaTeX strict warning: {warn}",
                         snippet=diag.math_content[:80],
                         file_path=file_path,
+                        severity="error" if strict_katex else "warning",
                     )
                 )
+
+    previews: list[Path] = []
+    if preview_dir is not None:
+        previews = render_mermaid_previews(content, preview_dir, stem=preview_stem)
 
     return VerificationReport(
         file_path=file_path,
@@ -752,6 +768,7 @@ def verify_markdown_detailed(
         intended_count=len(intended_spans),
         received_count=len(received_spans),
         issues=issues,
+        mermaid_previews=previews,
     )
 
 
@@ -781,7 +798,9 @@ def verify_file_detailed(
     stdout: bool = False,
     remote: bool = False,
     use_katex: bool = True,
-    strict_katex: bool = True,
+    strict_katex: bool = False,
+    preview_dir: Path | None = None,
+    preview_stem: str | None = None,
 ) -> VerificationReport:
     """Read a markdown file and verify it locally (default) or via GitHub API (--remote)."""
     with file_path.open("r", encoding="utf-8", newline="") as f:
@@ -794,6 +813,8 @@ def verify_file_detailed(
         remote=remote,
         use_katex=use_katex,
         strict_katex=strict_katex,
+        preview_dir=preview_dir,
+        preview_stem=preview_stem if preview_stem is not None else file_path.stem,
     )
 
 

@@ -536,6 +536,7 @@ class RuleD06(Rule):
     name: str = "mermaid-parse"
     description: str = "Opportunistically validate Mermaid diagram syntax using mmdc when installed"
     severity: str = "error"
+    is_expensive_readonly: bool = True
 
     def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
         blocks = _extract_mermaid_blocks(zones)
@@ -569,8 +570,10 @@ class RuleD06(Rule):
                         timeout=30,
                         env=env,
                     )
+                except subprocess.TimeoutExpired:
+                    continue
                 except (subprocess.SubprocessError, OSError):
-                    return violations
+                    break
 
                 if proc.returncode != 0:
                     combined = (
@@ -579,7 +582,7 @@ class RuleD06(Rule):
                         + proc.stdout.decode("utf-8", errors="replace")
                     ).strip()
                     if _is_browser_env_error(combined):
-                        continue
+                        break
                     first_line = next((ln.strip() for ln in combined.splitlines() if ln.strip()), "Syntax error")
                     violations.append(
                         Violation(

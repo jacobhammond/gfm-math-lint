@@ -266,7 +266,7 @@ def test_cli_verify_local_default_and_preview_dir(tmp_path: Path, capsys: pytest
 
     with (
         patch("gfm_math_lint.verifier.render_gfm", side_effect=AssertionError("Must stay offline")),
-        patch("gfm_math_lint.cli.render_mermaid_previews", return_value=[fake_png]) as mock_preview,
+        patch("gfm_math_lint.verifier.render_mermaid_previews", return_value=[fake_png]) as mock_preview,
     ):
         ret = main(["verify", "--preview-dir", str(preview_dir), str(doc)])
         assert ret == 0
@@ -275,6 +275,50 @@ def test_cli_verify_local_default_and_preview_dir(tmp_path: Path, capsys: pytest
         assert "locally (offline emulator)" in out
         assert "Recognized 1/1 math spans" in out
         assert "Rendered 1 Mermaid preview(s)" in out
+
+
+def test_cli_verify_preview_dir_unique_stems_across_subdirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify --preview-dir uses relative-path stems so subdirs do not overwrite each other."""
+    from unittest.mock import patch
+
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    (tmp_path / "a" / "README.md").write_text("```mermaid\ngraph TD\n    A --> B\n```\n", encoding="utf-8")
+    (tmp_path / "b" / "README.md").write_text("```mermaid\ngraph LR\n    C --> D\n```\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    stems: list[str] = []
+
+    def _fake_render(content: str, out_dir: Path, stem: str = "diagram") -> list[Path]:
+        stems.append(stem)
+        return [out_dir / f"{stem}_mermaid_01.png"]
+
+    with patch("gfm_math_lint.verifier.render_mermaid_previews", side_effect=_fake_render):
+        ret = main(["verify", "--no-katex", "--preview-dir", str(tmp_path / "out"), "."])
+        assert ret == 0
+        assert sorted(stems) == ["a__README", "b__README"]
+
+
+def test_cli_verify_strict_katex_and_no_katex_flags(tmp_path: Path) -> None:
+    from unittest.mock import patch
+
+    from gfm_math_lint.latex import KaTeXDiagnostic
+
+    doc = tmp_path / "doc.md"
+    doc.write_text(r"$\text{µm}$" + "\n", encoding="utf-8")
+    fake_diag = KaTeXDiagnostic(
+        math_content=r"\text{µm}",
+        display_mode=False,
+        error_message="",
+        warnings=["unknownSymbol: Unrecognized 'µ'"],
+    )
+
+    with patch("gfm_math_lint.verifier.run_local_katex_verification", return_value=[fake_diag]) as mock_katex:
+        assert main(["verify", str(doc)]) == 0
+        assert main(["verify", "--strict-katex", str(doc)]) == 1
+        assert mock_katex.call_count == 2
+        assert main(["verify", "--no-katex", "--strict-katex", str(doc)]) == 0
+        assert mock_katex.call_count == 2
 
 
 def test_cli_verify_preview_dir_missing_mmdc(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

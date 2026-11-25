@@ -7,6 +7,7 @@ import subprocess
 from unittest.mock import patch
 
 from gfm_math_lint.latex import (
+    _get_node_env,
     is_katex_available,
     run_local_katex_verification,
     validate_latex,
@@ -117,3 +118,24 @@ def test_katex_runner_parse_error_and_strict_warnings() -> None:
         diags_nonstrict = run_local_katex_verification([(r"\text{µm}", False), (r"\bad{", True)], strict_warnings=False)
         assert len(diags_nonstrict) == 1
         assert diags_nonstrict[0].error_message == "ParseError: Expected '}'"
+
+
+def test_validate_latex_nested_text_inside_math_and_delimiters() -> None:
+    # Nested \text{id} inside $...$ inside \text{...} must not reset outer math state
+    assert validate_latex(r"\text{let $f(x) = \text{id} + x_1$}") == []
+    # \lbrack / \rbrack and \lt / \gt are valid \left / \right delimiters
+    assert validate_latex(r"\left\lbrack 0, 1 \right\rbrack + \left\lt x \right\gt") == []
+    # Comments before macro/script arguments
+    assert validate_latex("\\frac{1} % comment\n {2} + x_ % comment\n 2") == []
+
+
+def test_validate_latex_compound_double_subscripts_and_node_pathsep() -> None:
+    issues_compound = validate_latex(r"x_1^2_3")
+    assert any(i.category == "latex-syntax" and "Double subscript" in i.message for i in issues_compound)
+
+    issues_nested_group = validate_latex(r"a_{b_1}_2")
+    assert any(i.category == "latex-syntax" and "Double subscript" in i.message for i in issues_nested_group)
+
+    with patch("os.pathsep", ";"):
+        env = _get_node_env()
+        assert ";" in env["NODE_PATH"]

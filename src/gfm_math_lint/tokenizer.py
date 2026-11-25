@@ -77,6 +77,7 @@ COMMENT_CLOSE_RE = re.compile(r"--!?>")
 
 TABLE_DELIM_CELL_RE = re.compile(r"^:?-+:?$")
 CURRENCY_SPAN_RE = re.compile(r"\$(\d+(?:,\d{3})*(?:\.\d{1,2})?(?:[kKmMbB]|(?=[,\s\.\)\?!]|$)))")
+_CURRENCY_RANGE_CAND_RE = re.compile(r"^\d+(?:,\d{3})*(?:\.\d{1,2})?[kKmMbB]?\s*[-/\u2013\u2014]\s*$")
 
 _CODE_DELIM_CACHE: dict[int, re.Pattern[str]] = {}
 
@@ -590,7 +591,9 @@ def scan_inline_spans(line: str, line_no: int) -> list[InlineSpan]:
             is_currency_pair = False
             if close_idx != -1:
                 cand = line[idx + 1 : close_idx]
-                if cand and cand[0].isdigit() and cand.endswith(" "):
+                if (cand and cand[0].isdigit() and cand.endswith(" ")) or (
+                    _CURRENCY_RANGE_CAND_RE.match(cand) and close_idx + 1 < line_len and line[close_idx + 1].isdigit()
+                ):
                     is_currency_pair = True
 
             if close_idx != -1 and not is_currency_pair:
