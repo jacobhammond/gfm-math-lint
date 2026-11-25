@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 
 from gfm_math_lint.fixer import apply_edits
-from gfm_math_lint.rules.diagram_rules import RuleD01, RuleD02, RuleD03, RuleD04, RuleD05
+from gfm_math_lint.rules.diagram_rules import (
+    RuleD01,
+    RuleD02,
+    RuleD03,
+    RuleD04,
+    RuleD05,
+    RuleD06,
+    build_puppeteer_config,
+    render_mermaid_previews,
+)
 from gfm_math_lint.tokenizer import scan_document_zones
 
 if TYPE_CHECKING:
@@ -264,3 +274,85 @@ def test_rule_d05_clean_unicode_and_currency_no_violations() -> None:
     lines = good.splitlines(keepends=True)
     zones = scan_document_zones(lines)
     assert len(rule.check(lines, zones)) == 0
+
+
+# ---------------------------------------------------------------------------
+# GFM-D06: mermaid-parse & desktop-quiet preview renderer
+# ---------------------------------------------------------------------------
+
+
+def test_rule_d06_skips_when_mmdc_absent() -> None:
+    rule = RuleD06()
+    content = "```mermaid\ngraph TD\n    A --> B\n```\n"
+    lines = content.splitlines(keepends=True)
+    zones = scan_document_zones(lines)
+    with patch("gfm_math_lint.rules.diagram_rules.find_mmdc_binary", return_value=None):
+        assert rule.check(lines, zones) == []
+
+
+def test_rule_d06_passes_on_zero_exit() -> None:
+    import subprocess
+
+    rule = RuleD06()
+    content = "```mermaid\ngraph TD\n    A --> B\n```\n"
+    lines = content.splitlines(keepends=True)
+    zones = scan_document_zones(lines)
+    ok_proc = subprocess.CompletedProcess(args=["mmdc"], returncode=0, stdout=b"", stderr=b"")
+    with (
+        patch("gfm_math_lint.rules.diagram_rules.find_mmdc_binary", return_value="/usr/bin/mmdc"),
+        patch("subprocess.run", return_value=ok_proc),
+    ):
+        assert rule.check(lines, zones) == []
+
+
+def test_rule_d06_reports_syntax_error_and_skips_browser_missing() -> None:
+    import subprocess
+
+    rule = RuleD06()
+    content = "```mermaid\ngraph TD\n    A --->|bad|\n```\n"
+    lines = content.splitlines(keepends=True)
+    zones = scan_document_zones(lines)
+
+    syntax_err = subprocess.CompletedProcess(
+        args=["mmdc"], returncode=1, stdout=b"", stderr=b"Error: Parse error on line 2\n"
+    )
+    with (
+        patch("gfm_math_lint.rules.diagram_rules.find_mmdc_binary", return_value="/usr/bin/mmdc"),
+        patch("subprocess.run", return_value=syntax_err),
+    ):
+        violations = rule.check(lines, zones)
+        assert len(violations) == 1
+        assert violations[0].rule_id == "GFM-D06"
+        assert "Parse error on line 2" in violations[0].message
+
+    browser_err = subprocess.CompletedProcess(
+        args=["mmdc"], returncode=1, stdout=b"", stderr=b"Error: Could not find Chrome\n"
+    )
+    with (
+        patch("gfm_math_lint.rules.diagram_rules.find_mmdc_binary", return_value="/usr/bin/mmdc"),
+        patch("subprocess.run", return_value=browser_err),
+    ):
+        assert rule.check(lines, zones) == []
+
+
+def test_build_puppeteer_config_and_preview_renderer(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    import subprocess
+
+    cfg = build_puppeteer_config(executable_path="/usr/bin/chrome-headless-shell")
+    assert cfg["headless"] == "shell"
+    assert cfg["executablePath"] == "/usr/bin/chrome-headless-shell"
+
+    # No mermaid blocks -> returns [] without needing mmdc
+    assert render_mermaid_previews("# Plain markdown\n", tmp_path) == []
+
+    md = "```mermaid\ngraph LR\n    A --> B\n```\n"
+    ok_proc = subprocess.CompletedProcess(args=["mmdc"], returncode=0, stdout=b"", stderr=b"")
+    with (
+        patch("gfm_math_lint.rules.diagram_rules.find_mmdc_binary", return_value="/usr/bin/mmdc"),
+        patch("subprocess.run", return_value=ok_proc) as mock_run,
+    ):
+        written = render_mermaid_previews(md, tmp_path / "previews", stem="report")
+        assert len(written) == 1
+        assert written[0].name == "report_mermaid_01.png"
+        env_passed = mock_run.call_args.kwargs["env"]
+        assert env_passed["PUPPETEER_SKIP_DOWNLOAD"] == "1"

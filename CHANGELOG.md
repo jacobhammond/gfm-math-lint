@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-25
+
+### Added
+- **Zero-Dependency LaTeX Validator & Optional KaTeX Strict Runner (`latex.py`)**: Added pure-Python `validate_latex()` for balanced braces, `\begin`/`\end` environments, `\left`/`\right` delimiters, `\text{...}` raw underscores, `\frac` argument checks, and dangling/double scripts, plus optional local Node.js `run_local_katex_verification()` surfacing strict KaTeX warnings (`katex-warning`).
+- **Differential Span Comparator & Full Local GFM Emulator (`emulator.py`)**: Added `extract_intended_math_spans()`, `emulate_gfm_document()`, and `compare_math_spans()` reporting `span-count-mismatch`, `span-dropped`, and `span-mutated` diffs offline.
+- **Privacy-First Local `verify` Default (`verify` vs. `verify --remote`)**: `gfm-math-lint verify` now runs 100% locally by default using `emulator.py` + `latex.py` + optional local KaTeX without transmitting user documents over the network. Pass `--remote` to opt into live GitHub `/markdown` API rendering. Both modes report `Recognized X/Y math spans` and per-span diffs.
+- **Synthetic Ground-Truth Calibrator (`gfm-math-lint probe`)**: Added `probe.py` and the `probe` CLI subcommand (`--offline`, `--format json`, `--token`) to validate `emulator.py` against the built-in `P1`–`P11` synthetic probe corpus in a single GitHub `/markdown` API call without transmitting user files, wired into `.github/workflows/conformance-gate.yml` on a weekly schedule.
+- **Opportunistic Mermaid Parse Rule (`GFM-D06`) & Preview Renderer (`--preview-dir`)**: Added `RuleD06` (`mermaid-parse`) and `verify --preview-dir <dir>` using `mmdc` with desktop-quiet `chrome-headless-shell` (`PUPPETEER_SKIP_DOWNLOAD=1`, `"headless": "shell"`).
+
 ## [0.2.0] - 2026-11-18
 
 ### Added
@@ -59,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
+[0.3.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.0...v0.1.1

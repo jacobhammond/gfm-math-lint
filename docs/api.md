@@ -119,10 +119,14 @@ html_content = build_preview_html("# My Formula\n\n$$\\frac{1}{2}$$")
 ```
 
 #### Functions:
-- **`verify_file(file_path: Path, token: str | None = None, stdout: bool = False) -> tuple[str, list[VerificationIssue]]`**:
-  Renders a file via GitHub's API and inspects for KaTeX errors, table column mismatches, tag collisions, split delimiters, and MathML pseudo-code stacking.
-- **`verify_markdown(content: str, file_path: str = "", token: str | None = None, stdout: bool = False) -> tuple[str, list[VerificationIssue]]`**:
-  Renders raw Markdown content via GitHub's API.
+- **`verify_file_detailed(file_path: Path, token: str | None = None, stdout: bool = False, remote: bool = False, use_katex: bool = True, strict_katex: bool = True) -> VerificationReport`**:
+  Verifies a file locally by default (or via GitHub's API when `remote=True`), returning span counts, differential span issues, `latex.py` structural diagnostics, and optional strict KaTeX warnings.
+- **`verify_markdown_detailed(content: str, file_path: str = "", token: str | None = None, stdout: bool = False, remote: bool = False, use_katex: bool = True, strict_katex: bool = True) -> VerificationReport`**:
+  Verifies raw Markdown content locally by default (or via GitHub's API when `remote=True`).
+- **`verify_file(file_path: Path, token: str | None = None, stdout: bool = False, remote: bool = False, use_katex: bool = True) -> tuple[str, list[VerificationIssue]]`**:
+  Tuple-returning wrapper around `verify_file_detailed`.
+- **`verify_markdown(content: str, file_path: str = "", token: str | None = None, stdout: bool = False, remote: bool = False, use_katex: bool = True) -> tuple[str, list[VerificationIssue]]`**:
+  Tuple-returning wrapper around `verify_markdown_detailed`.
 - **`build_preview_html(body_html: str, title: str = "GFM Math Preview") -> str`**:
   Wraps rendered GFM HTML in a standalone preview document with KaTeX styling and entity normalization.
 

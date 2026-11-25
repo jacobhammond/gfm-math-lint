@@ -9,12 +9,14 @@ from unittest.mock import patch
 import pytest
 
 from gfm_math_lint.cli import cmd_verify
+from gfm_math_lint.latex import KaTeXDiagnostic
 from gfm_math_lint.verifier import (
     GFMHTMLValidator,
     build_preview_html,
     open_in_browser,
     verify_file,
     verify_markdown,
+    verify_markdown_detailed,
 )
 
 
@@ -89,12 +91,43 @@ def test_build_preview_html_unescapes_math_entities() -> None:
     assert "&amp;lt;" not in preview
 
 
-def test_verify_markdown_clean() -> None:
+def test_verify_markdown_clean_remote() -> None:
     clean_html = '<p><math-renderer class="js-inline-math">$a + b$</math-renderer></p>'
     with patch("gfm_math_lint.verifier.render_gfm", return_value=clean_html):
-        rendered, issues = verify_markdown("$a + b$", "sample.md")
+        rendered, issues = verify_markdown("$a + b$", "sample.md", remote=True, use_katex=False)
         assert rendered == clean_html
         assert len(issues) == 0
+
+
+def test_verify_markdown_local_default_never_calls_network() -> None:
+    with patch("gfm_math_lint.verifier.render_gfm", side_effect=AssertionError("Network must not be called")):
+        report = verify_markdown_detailed("# Title\n\n$a_1 + b_2 = c_3$\n", "private.md", use_katex=False)
+        assert report.mode == "local"
+        assert report.intended_count == 1
+        assert report.received_count == 1
+        assert report.issues == []
+
+
+def test_verify_markdown_local_catches_span_diff_and_latex_errors() -> None:
+    # Mid-line \\ collapses to \ in emulator -> span-mutated
+    report_mid = verify_markdown_detailed("$$\n\\begin{bmatrix} a \\\\ b \\end{bmatrix}\n$$\n", use_katex=False)
+    assert any(i.category == "span-mutated" for i in report_mid.issues)
+
+    # Unbalanced brace caught by pure-Python latex.py
+    report_brace = verify_markdown_detailed("$\\frac{1}{2$\n", use_katex=False)
+    assert any(i.category == "unbalanced-braces" for i in report_brace.issues)
+
+
+def test_verify_markdown_surfaces_katex_strict_warnings() -> None:
+    fake_diag = KaTeXDiagnostic(
+        math_content=r"\text{µm}",
+        display_mode=False,
+        error_message="",
+        warnings=["unknownSymbol: Unrecognized 'µ'"],
+    )
+    with patch("gfm_math_lint.verifier.run_local_katex_verification", return_value=[fake_diag]):
+        report = verify_markdown_detailed(r"$\text{µm}$", use_katex=True, strict_katex=True)
+        assert any(i.category == "katex-warning" and "unknownSymbol" in i.message for i in report.issues)
 
 
 def test_cmd_verify_clean(tmp_path: Path) -> None:
@@ -107,6 +140,7 @@ def test_cmd_verify_clean(tmp_path: Path) -> None:
         token=None,
         html=None,
         browser=False,
+        remote=True,
         format="text",
     )
 
@@ -125,6 +159,7 @@ def test_cmd_verify_violations(tmp_path: Path) -> None:
         token=None,
         html=None,
         browser=False,
+        remote=True,
         format="text",
     )
 
@@ -144,6 +179,7 @@ def test_cmd_verify_html_export(tmp_path: Path) -> None:
         token=None,
         html=str(out_html),
         browser=False,
+        remote=True,
         format="text",
     )
 
@@ -285,7 +321,7 @@ def test_validator_pseudo_code_stacking_negative_controls() -> None:
 def test_verify_markdown_stdout(capsys: pytest.CaptureFixture[str]) -> None:
     html = "<p><math-renderer>$x$</math-renderer></p>"
     with patch("gfm_math_lint.verifier.render_gfm", return_value=html):
-        rendered, issues = verify_markdown("$x$", "test.md", stdout=True)
+        rendered, issues = verify_markdown("$x$", "test.md", stdout=True, remote=True, use_katex=False)
         assert rendered == html
         assert len(issues) == 0
         captured = capsys.readouterr()
@@ -297,7 +333,7 @@ def test_verify_file_stdout(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     doc.write_text("$x$\n", encoding="utf-8")
     html = "<p><math-renderer>$x$</math-renderer></p>"
     with patch("gfm_math_lint.verifier.render_gfm", return_value=html):
-        rendered, issues = verify_file(doc, stdout=True)
+        rendered, issues = verify_file(doc, stdout=True, remote=True, use_katex=False)
         assert rendered == html
         assert len(issues) == 0
         captured = capsys.readouterr()
@@ -312,6 +348,7 @@ def test_cmd_verify_stdin_clean(capsys: pytest.CaptureFixture[str]) -> None:
         html=None,
         browser=False,
         stdout=False,
+        remote=True,
         format="text",
     )
     with (
@@ -322,6 +359,7 @@ def test_cmd_verify_stdin_clean(capsys: pytest.CaptureFixture[str]) -> None:
         assert code == 0
         captured = capsys.readouterr()
         assert "Auditing <stdin>" in captured.out
+        assert "Recognized 1/1 math spans" in captured.out
         assert "0 rendering anomalies detected" in captured.out
 
 
@@ -333,6 +371,7 @@ def test_cmd_verify_stdin_violations(capsys: pytest.CaptureFixture[str]) -> None
         html=None,
         browser=False,
         stdout=False,
+        remote=True,
         format="text",
     )
     with (
@@ -353,6 +392,7 @@ def test_cmd_verify_stdin_conflicting_paths(capsys: pytest.CaptureFixture[str]) 
         html=None,
         browser=False,
         stdout=False,
+        remote=False,
         format="text",
     )
     code = cmd_verify(args)
@@ -368,6 +408,7 @@ def test_cmd_verify_stdin_read_error(capsys: pytest.CaptureFixture[str]) -> None
         html=None,
         browser=False,
         stdout=False,
+        remote=False,
         format="text",
     )
     with patch("sys.stdin.read", side_effect=OSError("Read failure")):
@@ -388,6 +429,7 @@ def test_cmd_verify_stdout_streams_raw_html_only(tmp_path: Path, capsys: pytest.
         html=None,
         browser=False,
         stdout=True,
+        remote=True,
         format="text",
     )
     with patch("gfm_math_lint.verifier.render_gfm", return_value=rendered_html):
@@ -408,6 +450,7 @@ def test_cmd_verify_stdin_render_exception(capsys: pytest.CaptureFixture[str]) -
         html=None,
         browser=False,
         stdout=False,
+        remote=True,
         format="text",
     )
     with (
@@ -428,6 +471,7 @@ def test_cmd_verify_stdin_html_and_browser(tmp_path: Path, capsys: pytest.Captur
         html=str(out_html),
         browser=True,
         stdout=False,
+        remote=True,
         format="text",
     )
     clean_html = '<p><math-renderer class="js-inline-math">$x$</math-renderer></p>'
@@ -452,6 +496,7 @@ def test_cmd_verify_stdout_with_github_format(capsys: pytest.CaptureFixture[str]
         html=None,
         browser=False,
         stdout=True,
+        remote=True,
         format="github",
     )
     with (

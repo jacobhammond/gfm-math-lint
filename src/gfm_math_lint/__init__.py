@@ -15,7 +15,7 @@ from gfm_math_lint.rules.base import Rule, Violation
 try:
     __version__ = metadata.version("gfm-math-lint")
 except metadata.PackageNotFoundError:
-    __version__ = "0.1.2"
+    __version__ = "0.3.0"
 
 __all__: list[str] = [
     "LintConfig",
@@ -28,10 +28,17 @@ __all__: list[str] = [
 ]
 
 _LAZY_EXPORTS = {
+    "LaTeXIssue": "gfm_math_lint.latex",
+    "ProbeReport": "gfm_math_lint.probe",
     "VerificationIssue": "gfm_math_lint.verifier",
+    "VerificationReport": "gfm_math_lint.verifier",
     "build_preview_html": "gfm_math_lint.verifier",
+    "run_probes": "gfm_math_lint.probe",
+    "validate_latex": "gfm_math_lint.latex",
     "verify_file": "gfm_math_lint.verifier",
+    "verify_file_detailed": "gfm_math_lint.verifier",
     "verify_markdown": "gfm_math_lint.verifier",
+    "verify_markdown_detailed": "gfm_math_lint.verifier",
 }
 
 

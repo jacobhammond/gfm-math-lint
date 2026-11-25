@@ -1,6 +1,6 @@
 # Complete Rule Catalog & Authoring Guide
 
-This catalog provides detailed specifications for all 27 rules implemented in **gfm-math-lint**, explaining why each failure mode occurs on GitHub, how the auto-fixer repairs it, and how to write custom rules.
+This catalog provides detailed specifications for all 28 rules implemented in **gfm-math-lint**, explaining why each failure mode occurs on GitHub, how the auto-fixer repairs it, and how to write custom rules.
 
 ---
 
@@ -34,6 +34,7 @@ This catalog provides detailed specifications for all 27 rules implemented in **
 | [`GFM-D03`](#gfm-d03-mermaid-newline-linebreak) | Diagrams | `mermaid-newline-linebreak` | Error | Yes |
 | [`GFM-D04`](#gfm-d04-mermaid-label-special-chars) | Diagrams | `mermaid-label-special-chars` | Error | Yes |
 | [`GFM-D05`](#gfm-d05-math-in-mermaid) | Diagrams | `math-in-mermaid` | Warning | No |
+| [`GFM-D06`](#gfm-d06-mermaid-parse) | Diagrams | `mermaid-parse` | Error | No |
 | [`GFM-S01`](#gfm-s01-unsafe-shell-expansion) | Shell | `unsafe-shell-expansion` | Error | No |
 
 ---
@@ -151,6 +152,10 @@ This catalog provides detailed specifications for all 27 rules implemented in **
 ### GFM-D05: `math-in-mermaid`
 - **Issue:** GitHub's Mermaid renderer does not typeset LaTeX `$...$` or macros inside diagram labels.
 - **Remediation:** Replace LaTeX math in Mermaid labels with Unicode symbols (`Δ`, `α`, `²`).
+
+### GFM-D06: `mermaid-parse`
+- **Issue:** Syntactically invalid Mermaid diagrams fail to render on GitHub and in local previewers.
+- **Remediation:** Opportunistically validates Mermaid blocks using `mmdc` (`@mermaid-js/mermaid-cli`) with desktop-quiet `chrome-headless-shell` when installed on `PATH`; gracefully skips when `mmdc` or a headless browser is absent.
 
 ### GFM-S01: `unsafe-shell-expansion`
 - **Issue:** Passing markdown bodies with double quotes (`-b "..."` or `--body "..."` / `--notes "..."`) in `gh pr comment`, `gh issue comment`, `gh release create`, `gh issue create`, or `gh pr create` commands in bash scripts or CI workflows exposes LaTeX `$x$` expressions and math variables to unintended shell variable expansion and subshell execution (`$(...)`).

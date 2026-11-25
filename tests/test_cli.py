@@ -241,7 +241,7 @@ def test_check_with_explicit_config(tmp_path: Path) -> None:
 
 
 def test_cli_verify_stdin(capsys: pytest.CaptureFixture[str]) -> None:
-    """Test 'verify -' reads piped markdown from stdin."""
+    """Test 'verify - --remote' reads piped markdown from stdin."""
     from unittest.mock import patch
 
     clean_html = '<p><math-renderer class="js-inline-math">$x = y$</math-renderer></p>'
@@ -249,14 +249,47 @@ def test_cli_verify_stdin(capsys: pytest.CaptureFixture[str]) -> None:
         patch("sys.stdin.read", return_value="$x = y$\n"),
         patch("gfm_math_lint.verifier.render_gfm", return_value=clean_html),
     ):
-        ret = main(["verify", "-"])
+        ret = main(["verify", "--remote", "-"])
         assert ret == 0
         captured = capsys.readouterr()
-        assert "Auditing <stdin>" in captured.out
+        assert "Auditing <stdin> against api.github.com" in captured.out
+
+
+def test_cli_verify_local_default_and_preview_dir(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Test 'verify' defaults to local offline emulator and supports --preview-dir."""
+    from unittest.mock import patch
+
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Doc\n\n$a_1 + b_2$\n\n```mermaid\ngraph TD\n    A --> B\n```\n", encoding="utf-8")
+    preview_dir = tmp_path / "previews"
+    fake_png = preview_dir / "doc_mermaid_01.png"
+
+    with (
+        patch("gfm_math_lint.verifier.render_gfm", side_effect=AssertionError("Must stay offline")),
+        patch("gfm_math_lint.cli.render_mermaid_previews", return_value=[fake_png]) as mock_preview,
+    ):
+        ret = main(["verify", "--preview-dir", str(preview_dir), str(doc)])
+        assert ret == 0
+        assert mock_preview.called
+        out = capsys.readouterr().out
+        assert "locally (offline emulator)" in out
+        assert "Recognized 1/1 math spans" in out
+        assert "Rendered 1 Mermaid preview(s)" in out
+
+
+def test_cli_verify_preview_dir_missing_mmdc(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from unittest.mock import patch
+
+    doc = tmp_path / "doc.md"
+    doc.write_text("```mermaid\ngraph TD\n    A --> B\n```\n", encoding="utf-8")
+    with patch("gfm_math_lint.rules.diagram_rules.find_mmdc_binary", return_value=None):
+        ret = main(["verify", "--preview-dir", str(tmp_path / "out"), str(doc)])
+        assert ret == 2
+        assert "requires 'mmdc'" in capsys.readouterr().err
 
 
 def test_cli_verify_stdout_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """Test 'verify --stdout' prints rendered HTML directly to stdout and diagnostics to stderr."""
+    """Test 'verify --remote --stdout' prints rendered HTML directly to stdout and diagnostics to stderr."""
     from unittest.mock import patch
 
     doc = tmp_path / "doc.md"
@@ -264,7 +297,7 @@ def test_cli_verify_stdout_flag(tmp_path: Path, capsys: pytest.CaptureFixture[st
     clean_html = '<p><math-renderer class="js-inline-math">$x = y$</math-renderer></p>'
 
     with patch("gfm_math_lint.verifier.render_gfm", return_value=clean_html):
-        ret = main(["verify", "--stdout", str(doc)])
+        ret = main(["verify", "--remote", "--stdout", str(doc)])
         assert ret == 0
         captured = capsys.readouterr()
         assert captured.out.strip() == clean_html.strip()
@@ -272,7 +305,7 @@ def test_cli_verify_stdout_flag(tmp_path: Path, capsys: pytest.CaptureFixture[st
 
 
 def test_cli_verify_raw_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """Test 'verify --raw' (alias for --stdout) prints rendered HTML directly to stdout."""
+    """Test 'verify --remote --raw' (alias for --stdout) prints rendered HTML directly to stdout."""
     from unittest.mock import patch
 
     doc = tmp_path / "doc.md"
@@ -280,7 +313,7 @@ def test_cli_verify_raw_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     clean_html = '<p><math-renderer class="js-inline-math">$x = y$</math-renderer></p>'
 
     with patch("gfm_math_lint.verifier.render_gfm", return_value=clean_html):
-        ret = main(["verify", "--raw", str(doc)])
+        ret = main(["verify", "--remote", "--raw", str(doc)])
         assert ret == 0
         captured = capsys.readouterr()
         assert captured.out.strip() == clean_html.strip()
