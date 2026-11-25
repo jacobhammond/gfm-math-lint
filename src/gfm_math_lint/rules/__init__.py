@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from gfm_math_lint.rules.base import Rule, Violation
-from gfm_math_lint.rules.code_rules import RuleC01, RuleC02
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from gfm_math_lint.tokenizer import DocumentZone
+from gfm_math_lint.rules.code_rules import RuleC01, RuleC02, RuleC03
 from gfm_math_lint.rules.diagram_rules import RuleD01, RuleD02, RuleD03, RuleD04, RuleD05, RuleD06
 from gfm_math_lint.rules.math_rules import (
     RuleM01,
@@ -56,6 +63,7 @@ ALL_TABLE_RULES: list[Rule] = [
 ALL_CODE_RULES: list[Rule] = [
     RuleC01(),
     RuleC02(),
+    RuleC03(),
 ]
 
 ALL_DIAGRAM_RULES: list[Rule] = [
@@ -78,7 +86,24 @@ ALL_SHELL_RULES: list[Rule] = [
     RuleS01(),
 ]
 
-RULE_MAP: dict[str, Rule] = {rule.id: rule for rule in (*ALL_MARKDOWN_RULES, *ALL_SHELL_RULES)}
+
+class RuleE01(Rule):
+    """GFM-E01: Unexplained GFM math span discrepancy detected by the differential emulator."""
+
+    id: str = "GFM-E01"
+    name: str = "unexplained-span-diff"
+    description: str = "Fallback diagnostic for unexplained GFM math span discrepancies detected by emulator"
+    severity: str = "error"
+
+    def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+        """Evaluated directly by Linter's differential span-diff fallback."""
+        return []
+
+
+RULE_MAP: dict[str, Rule] = {
+    **{rule.id: rule for rule in (*ALL_MARKDOWN_RULES, *ALL_SHELL_RULES)},
+    "GFM-E01": RuleE01(),
+}
 
 
 def get_rule_by_id(rule_id: str) -> Rule | None:
@@ -97,12 +122,14 @@ __all__ = [
     "Rule",
     "RuleC01",
     "RuleC02",
+    "RuleC03",
     "RuleD01",
     "RuleD02",
     "RuleD03",
     "RuleD04",
     "RuleD05",
     "RuleD06",
+    "RuleE01",
     "RuleM01",
     "RuleM02",
     "RuleM03",

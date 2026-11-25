@@ -1,6 +1,6 @@
 # Complete Rule Catalog & Authoring Guide
 
-This catalog provides detailed specifications for all 28 rules implemented in **gfm-math-lint**, explaining why each failure mode occurs on GitHub, how the auto-fixer repairs it, and how to write custom rules.
+This catalog provides detailed specifications for all 29 rules (plus `GFM-E01` differential fallback) implemented in **gfm-math-lint**, explaining why each failure mode occurs on GitHub, how the auto-fixer repairs it, and how to write custom rules.
 
 ---
 
@@ -29,6 +29,8 @@ This catalog provides detailed specifications for all 28 rules implemented in **
 | [`GFM-T01`](#gfm-t01-table-pipe-collision) | Tables | `table-pipe-collision` | Error | Yes |
 | [`GFM-C01`](#gfm-c01-fence-nesting-length) | Code | `fence-nesting-length` | Error | Yes |
 | [`GFM-C02`](#gfm-c02-inline-code-backtick-nesting) | Code | `inline-code-backtick-nesting` | Error | Yes |
+| [`GFM-C03`](#gfm-c03-unrendered-math-or-diagram-fence) | Code | `unrendered-math-or-diagram-fence` | Warning | No |
+| [`GFM-E01`](#gfm-e01-unexplained-span-diff) | Emulator | `unexplained-span-diff` | Error | No |
 | [`GFM-D01`](#gfm-d01-mermaid-identifier) | Diagrams | `mermaid-identifier` | Warning | No |
 | [`GFM-D02`](#gfm-d02-fence-boundary-symmetry) | Diagrams | `fence-boundary-symmetry` | Error | Yes |
 | [`GFM-D03`](#gfm-d03-mermaid-newline-linebreak) | Diagrams | `mermaid-newline-linebreak` | Error | Yes |
@@ -132,6 +134,14 @@ This catalog provides detailed specifications for all 28 rules implemented in **
 ### GFM-C02: `inline-code-backtick-nesting`
 - **Issue:** Inline code spans containing literal backticks must use multi-backtick delimiters per CommonMark §6.3.
 - **Auto-Fix:** Converts surrounding delimiters to double backticks (`` `code` ``).
+
+### GFM-C03: `unrendered-math-or-diagram-fence`
+- **Issue:** Mathematical equations (`dU/dt = -γ U + Σ P_k`) or 2D ASCII box-drawing topology diagrams placed inside unlabelled or `text`/`plaintext` code fences are skipped by Markdown math/diagram renderers.
+- **Remediation:** Convert equations to `$$ ... $$` display math or ASCII diagrams to ```` ```mermaid ```` blocks (directory `tree` listings are excluded).
+
+### GFM-E01: `unexplained-span-diff`
+- **Issue:** Fallback differential emulator diagnostic emitted when `emulate_gfm_document()` detects a math span drop or CommonMark mutation not already covered by `GFM-M01`–`GFM-M18` or `GFM-T01`.
+- **Remediation:** Inspect the reported line with `gfm-math-lint verify` and rewrite using the GFM safe subset (or suppress with `<!-- gfm-math-lint-disable-next-line GFM-E01 -->`).
 
 ### GFM-D01: `mermaid-identifier`
 - **Issue:** Mermaid diagram node labels containing whitespace or special characters without explicit quotes cause parsing failures.

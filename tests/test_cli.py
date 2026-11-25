@@ -415,3 +415,86 @@ def test_cli_comment_conflicting_modes(capsys: pytest.CaptureFixture[str]) -> No
     assert ret == 2
     captured = capsys.readouterr()
     assert "Conflicting target action modes" in captured.err
+
+
+def test_cli_check_fix_shell_verify_json_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    import json
+
+    md = tmp_path / "doc.md"
+    md.write_text("```math\nx = 1\n```\n", encoding="utf-8")
+
+    # check --format json
+    ret_check = main(["check", "--format", "json", str(md)])
+    assert ret_check == 1
+    check_data = json.loads(capsys.readouterr().out)
+    assert check_data["command"] == "check"
+    assert check_data["target"] == "dual"
+    assert check_data["summary"]["total_violations"] == 1
+    assert check_data["files"][0]["violations"][0]["rule_id"] == "GFM-M01"
+
+    # fix --format json
+    ret_fix = main(["fix", "--format", "json", str(md)])
+    assert ret_fix == 0
+    fix_data = json.loads(capsys.readouterr().out)
+    assert fix_data["command"] == "fix"
+    assert fix_data["summary"]["fixed_violations"] == 1
+    assert fix_data["summary"]["remaining_violations"] == 0
+    assert fix_data["files"][0]["modified"] is True
+    assert fix_data["files"][0]["span_diff"]["intended_count"] == 1
+
+    # verify --format json (local)
+    ret_verify = main(["verify", "--no-katex", "--format", "json", str(md)])
+    assert ret_verify == 0
+    verify_data = json.loads(capsys.readouterr().out)
+    assert verify_data["command"] == "verify"
+    assert verify_data["mode"] == "local"
+    assert verify_data["summary"]["intended_math_spans"] == 1
+    assert verify_data["summary"]["received_math_spans"] == 1
+
+    # check-shell --format json
+    sh = tmp_path / "run.sh"
+    sh.write_text('gh pr comment 1 -b "$x_1$"\n', encoding="utf-8")
+    ret_shell = main(["check-shell", "--format", "json", str(sh)])
+    assert ret_shell == 1
+    shell_data = json.loads(capsys.readouterr().out)
+    assert shell_data["command"] == "check-shell"
+    assert shell_data["summary"]["total_violations"] == 1
+    assert shell_data["files"][0]["violations"][0]["rule_id"] == "GFM-S01"
+
+
+def test_cli_check_diff_json_and_verify_json_edge_cases(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    import json
+    from unittest.mock import patch
+
+    md = tmp_path / "doc.md"
+    md.write_text("```math\nx = 1\n```\n", encoding="utf-8")
+
+    # check --diff --format json (without --fix) must report modified=False on disk
+    ret_diff = main(["check", "--diff", "--format", "json", str(md)])
+    assert ret_diff == 1
+    diff_data = json.loads(capsys.readouterr().out)
+    assert diff_data["command"] == "check"
+    assert diff_data["summary"]["files_modified"] == 0
+    assert diff_data["files"][0]["modified"] is False
+    assert diff_data["files"][0]["would_modify"] is True
+    assert diff_data["files"][0]["fixed_violations"] == []
+    assert "--- a/" in diff_data["files"][0]["diff"]
+
+    # verify - --stdout --format json (HTML on stdout, JSON on stderr, with VerificationIssue)
+    with patch("sys.stdin.read", return_value="the base-$e$ error\n"):
+        ret_stdin = main(["verify", "--no-katex", "--stdout", "--format", "json", "-"])
+        assert ret_stdin == 1
+        captured = capsys.readouterr()
+        assert "<p>the base-$e$ error</p>" in captured.out
+        stdin_json = json.loads(captured.err)
+        assert stdin_json["command"] == "verify"
+        assert stdin_json["summary"]["errors"] >= 1
+        assert stdin_json["files"][0]["file"] == "<stdin>"
+
+    # verify --format json on empty directory
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    assert main(["verify", "--no-katex", "--format", "json", str(empty_dir)]) == 0
+    empty_json = json.loads(capsys.readouterr().out)
+    assert empty_json["summary"]["files_verified"] == 0
+    assert empty_json["files"] == []

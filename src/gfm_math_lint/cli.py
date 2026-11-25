@@ -8,6 +8,7 @@ import os
 import sys
 from importlib import metadata
 from pathlib import Path
+from typing import Any
 
 from gfm_math_lint.comment import create_issue, create_pr, post_comment, preview_markdown
 from gfm_math_lint.config import load_config
@@ -17,10 +18,13 @@ from gfm_math_lint.linter import (
     _escape_workflow_property,
     format_violation_github,
     format_violation_text,
+    span_diff_to_dict,
+    violation_to_dict,
 )
 from gfm_math_lint.probe import run_probes
 from gfm_math_lint.rules.shell_rules import RuleS01
 from gfm_math_lint.verifier import (
+    VerificationIssue,
     build_preview_html,
     open_in_browser,
     verify_file_detailed,
@@ -33,7 +37,7 @@ def get_version() -> str:
     try:
         return metadata.version("gfm-math-lint")
     except metadata.PackageNotFoundError:
-        return "0.3.0"
+        return "0.4.0"
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -59,7 +63,7 @@ def get_parser() -> argparse.ArgumentParser:
     check_parser.add_argument("--config", help="Path to pyproject.toml configuration file")
     check_parser.add_argument(
         "--format",
-        choices=["text", "github"],
+        choices=["text", "github", "json"],
         default="text",
         help="Output format (default: text)",
     )
@@ -76,7 +80,7 @@ def get_parser() -> argparse.ArgumentParser:
     fix_parser.add_argument("--config", help="Path to pyproject.toml configuration file")
     fix_parser.add_argument(
         "--format",
-        choices=["text", "github"],
+        choices=["text", "github", "json"],
         default="text",
         help="Output format (default: text)",
     )
@@ -95,7 +99,7 @@ def get_parser() -> argparse.ArgumentParser:
     shell_parser.add_argument("paths", nargs="*", default=["."], help="Files or directories to check")
     shell_parser.add_argument(
         "--format",
-        choices=["text", "github"],
+        choices=["text", "github", "json"],
         default="text",
         help="Output format (default: text)",
     )
@@ -161,7 +165,7 @@ def get_parser() -> argparse.ArgumentParser:
     )
     verify_parser.add_argument(
         "--format",
-        choices=["text", "github"],
+        choices=["text", "github", "json"],
         default="text",
         help="Output format (default: text)",
     )
@@ -287,6 +291,13 @@ def cmd_check(args: argparse.Namespace) -> int:
 
     total_violations = 0
     total_modified = 0
+    is_json = args.format == "json"
+    json_files: list[dict[str, Any]] = []
+    total_fixed_count = 0
+    total_remaining_count = 0
+    total_intended_spans = 0
+    total_received_spans = 0
+    total_span_diffs = 0
 
     format_fn = format_violation_github if args.format == "github" else format_violation_text
 
@@ -299,27 +310,104 @@ def cmd_check(args: argparse.Namespace) -> int:
         except (OSError, UnicodeDecodeError) as e:
             sys.stderr.write(f"Error reading {file_path}: {e}\n")
             total_violations += 1
+            if is_json:
+                json_files.append(
+                    {
+                        "file": str(file_path),
+                        "target": config.target,
+                        "modified": False,
+                        "error": str(e),
+                        "violations": [],
+                        "fixed_violations": [],
+                        "remaining_violations": [],
+                        "span_diff": {"intended_count": 0, "received_count": 0, "diffs": []},
+                    }
+                )
             continue
         except Exception as e:
             sys.stderr.write(f"Internal error processing {file_path}: {e}\n")
             return 2
 
-        if args.diff and res.diff:
-            sys.stdout.write(res.diff)
-
-        if args.fix:
-            if res.modified and args.format == "text":
-                sys.stdout.write(f"Fixed {len(res.fixed_violations)} violation(s) in {file_path}\n")
-            for v in res.remaining_violations:
-                sys.stdout.write(format_fn(v, str(file_path)) + "\n")
-            total_violations += len(res.remaining_violations)
+        if is_json:
+            if args.fix:
+                entry = res.to_json_dict(target=config.target)
+                total_fixed_count += len(res.fixed_violations)
+                total_remaining_count += len(res.remaining_violations)
+                total_intended_spans += res.span_diff.intended_count
+                total_received_spans += res.span_diff.received_count
+                total_span_diffs += len(res.span_diff.diffs)
+                total_violations += len(res.remaining_violations)
+                if res.modified:
+                    total_modified += 1
+            else:
+                init_sd = res.initial_span_diff
+                entry = {
+                    "file": res.file_path,
+                    "target": config.target,
+                    "modified": False,
+                    "violations": [violation_to_dict(v) for v in res.violations],
+                    "fixed_violations": [],
+                    "remaining_violations": [violation_to_dict(v) for v in res.violations],
+                    "span_diff": {
+                        "intended_count": init_sd.intended_count,
+                        "received_count": init_sd.received_count,
+                        "diffs": [span_diff_to_dict(d) for d in init_sd.diffs],
+                    },
+                }
+                if args.diff:
+                    entry["would_modify"] = res.modified
+                    entry["diff"] = res.diff
+                total_remaining_count += len(res.violations)
+                total_intended_spans += init_sd.intended_count
+                total_received_spans += init_sd.received_count
+                total_span_diffs += len(init_sd.diffs)
+                total_violations += len(res.violations)
+            json_files.append(entry)
         else:
-            for v in res.violations:
-                sys.stdout.write(format_fn(v, str(file_path)) + "\n")
-            total_violations += len(res.violations)
+            total_fixed_count += len(res.fixed_violations)
+            total_remaining_count += len(res.remaining_violations)
+            total_intended_spans += res.span_diff.intended_count
+            total_received_spans += res.span_diff.received_count
+            total_span_diffs += len(res.span_diff.diffs)
 
-        if res.modified:
+            if args.diff and res.diff:
+                sys.stdout.write(res.diff)
+
+            if args.fix:
+                if res.modified and args.format == "text":
+                    sys.stdout.write(f"Fixed {len(res.fixed_violations)} violation(s) in {file_path}\n")
+                for v in res.remaining_violations:
+                    sys.stdout.write(format_fn(v, str(file_path)) + "\n")
+                total_violations += len(res.remaining_violations)
+            else:
+                for v in res.violations:
+                    sys.stdout.write(format_fn(v, str(file_path)) + "\n")
+                total_violations += len(res.violations)
+
+            if res.modified:
+                total_modified += 1
+
+        if not is_json and args.diff and res.modified and not args.fix:
             total_modified += 1
+
+    if is_json:
+        payload = {
+            "version": get_version(),
+            "command": "fix" if args.fix else "check",
+            "target": config.target,
+            "summary": {
+                "files_checked": len(json_files),
+                "files_modified": total_modified,
+                "total_violations": total_violations,
+                "fixed_violations": total_fixed_count,
+                "remaining_violations": total_remaining_count,
+                "intended_math_spans": total_intended_spans,
+                "received_math_spans": total_received_spans,
+                "span_diffs": total_span_diffs,
+            },
+            "files": json_files,
+        }
+        sys.stdout.write(json.dumps(payload, indent=2) + "\n")
 
     if args.fix:
         return 1 if total_violations > 0 else 0
@@ -338,6 +426,8 @@ def cmd_check_shell(args: argparse.Namespace) -> int:
 
     rule = RuleS01()
     total_violations = 0
+    is_json = args.format == "json"
+    json_files: list[dict[str, Any]] = []
 
     format_fn = format_violation_github if args.format == "github" else format_violation_text
 
@@ -356,10 +446,30 @@ def cmd_check_shell(args: argparse.Namespace) -> int:
         lines = content.splitlines(keepends=True)
         violations = rule.check(lines, [], str(file_path))
 
-        for v in violations:
-            sys.stdout.write(format_fn(v, str(file_path)) + "\n")
+        if is_json:
+            json_files.append(
+                {
+                    "file": str(file_path),
+                    "violations": [violation_to_dict(v) for v in violations],
+                }
+            )
+        else:
+            for v in violations:
+                sys.stdout.write(format_fn(v, str(file_path)) + "\n")
 
         total_violations += len(violations)
+
+    if is_json:
+        payload = {
+            "version": get_version(),
+            "command": "check-shell",
+            "summary": {
+                "files_checked": len(json_files),
+                "total_violations": total_violations,
+            },
+            "files": json_files,
+        }
+        sys.stdout.write(json.dumps(payload, indent=2) + "\n")
 
     if total_violations > 0:
         return 1
@@ -472,10 +582,43 @@ def _preview_stem_for_path(file_path: Path, root_dir: Path) -> str:
     return "__".join(parts) if parts else file_path.stem
 
 
+def _verification_issue_to_dict(issue: VerificationIssue) -> dict[str, Any]:
+    return {
+        "category": issue.category,
+        "severity": issue.severity,
+        "message": issue.message,
+        "snippet": issue.snippet,
+    }
+
+
+def _build_verify_json_payload(
+    mode: str,
+    files: list[dict[str, Any]],
+    intended: int,
+    received: int,
+    errors: int,
+    warnings: int,
+) -> dict[str, Any]:
+    return {
+        "version": get_version(),
+        "command": "verify",
+        "mode": mode,
+        "summary": {
+            "files_verified": len(files),
+            "intended_math_spans": intended,
+            "received_math_spans": received,
+            "errors": errors,
+            "warnings": warnings,
+        },
+        "files": files,
+    }
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """Execute 'verify' subcommand."""
     is_stdout = getattr(args, "stdout", False)
     is_remote = getattr(args, "remote", False)
+    is_json = getattr(args, "format", "text") == "json"
     use_katex = not getattr(args, "no_katex", False)
     strict_katex = getattr(args, "strict_katex", False)
     preview_dir_arg = getattr(args, "preview_dir", None)
@@ -493,10 +636,11 @@ def cmd_verify(args: argparse.Namespace) -> int:
             sys.stderr.write(f"Error reading stdin: {e}\n")
             return 2
 
-        if is_remote:
-            diag_stream.write("Auditing <stdin> against api.github.com...\n")
-        else:
-            diag_stream.write("Auditing <stdin> locally (offline emulator)...\n")
+        if not is_json:
+            if is_remote:
+                diag_stream.write("Auditing <stdin> against api.github.com...\n")
+            else:
+                diag_stream.write("Auditing <stdin> locally (offline emulator)...\n")
 
         try:
             report = verify_markdown_detailed(
@@ -514,39 +658,62 @@ def cmd_verify(args: argparse.Namespace) -> int:
             sys.stderr.write(f"Error verifying <stdin>: {e}\n")
             return 2
 
-        diag_stream.write(f"<stdin>: Recognized {report.received_count}/{report.intended_count} math spans\n")
+        error_count = sum(1 for i in report.issues if i.severity != "warning")
+        warning_count = sum(1 for i in report.issues if i.severity == "warning")
 
-        error_count = 0
-        for issue in report.issues:
-            if issue.severity != "warning":
-                error_count += 1
-            if args.format == "github":
-                file_esc = _escape_workflow_property("<stdin>")
-                cat_esc = _escape_workflow_property(issue.category)
-                msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
-                level = "warning" if issue.severity == "warning" else "error"
-                diag_stream.write(f"::{level} file={file_esc},title={cat_esc}::{msg_esc}\n")
-            else:
-                diag_stream.write(f"<stdin>: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
+        if is_json:
+            payload = _build_verify_json_payload(
+                mode=report.mode,
+                files=[
+                    {
+                        "file": "<stdin>",
+                        "mode": report.mode,
+                        "intended_count": report.intended_count,
+                        "received_count": report.received_count,
+                        "issues": [_verification_issue_to_dict(i) for i in report.issues],
+                        "mermaid_previews": [str(p) for p in report.mermaid_previews],
+                    }
+                ],
+                intended=report.intended_count,
+                received=report.received_count,
+                errors=error_count,
+                warnings=warning_count,
+            )
+            diag_stream.write(json.dumps(payload, indent=2) + "\n")
+        else:
+            diag_stream.write(f"<stdin>: Recognized {report.received_count}/{report.intended_count} math spans\n")
+            for issue in report.issues:
+                if args.format == "github":
+                    file_esc = _escape_workflow_property("<stdin>")
+                    cat_esc = _escape_workflow_property(issue.category)
+                    msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
+                    level = "warning" if issue.severity == "warning" else "error"
+                    diag_stream.write(f"::{level} file={file_esc},title={cat_esc}::{msg_esc}\n")
+                else:
+                    diag_stream.write(f"<stdin>: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
 
-        if report.mermaid_previews:
-            diag_stream.write(f"Rendered {len(report.mermaid_previews)} Mermaid preview(s) to {preview_dir}\n")
+            if report.mermaid_previews:
+                diag_stream.write(f"Rendered {len(report.mermaid_previews)} Mermaid preview(s) to {preview_dir}\n")
 
         if args.html:
             out_path = Path(args.html)
             full_html = build_preview_html(report.rendered_html, title="GFM Math Verification")
             out_path.write_text(full_html, encoding="utf-8")
-            diag_stream.write(f"Wrote rendered HTML preview to {out_path}\n")
+            if not is_json:
+                diag_stream.write(f"Wrote rendered HTML preview to {out_path}\n")
 
         if args.browser:
             opened_path = open_in_browser(report.rendered_html, title="GFM Math Verification")
-            diag_stream.write(f"Opened preview in browser ({opened_path})\n")
+            if not is_json:
+                diag_stream.write(f"Opened preview in browser ({opened_path})\n")
 
         if error_count > 0:
-            sys.stderr.write(f"Verification failed: {error_count} rendering anomaly(ies) detected.\n")
+            if not is_json:
+                sys.stderr.write(f"Verification failed: {error_count} rendering anomaly(ies) detected.\n")
             return 1
 
-        diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")
+        if not is_json:
+            diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")
         return 0
 
     root_dir = Path.cwd()
@@ -565,16 +732,32 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
     filtered_files = [f for f in md_files if not config.is_file_excluded(f, root_dir)]
     if not filtered_files:
-        sys.stderr.write("No markdown files found to verify.\n")
+        if is_json:
+            payload = _build_verify_json_payload(
+                mode="remote" if is_remote else "local",
+                files=[],
+                intended=0,
+                received=0,
+                errors=0,
+                warnings=0,
+            )
+            diag_stream.write(json.dumps(payload, indent=2) + "\n")
+        else:
+            sys.stderr.write("No markdown files found to verify.\n")
         return 0
 
-    if is_remote:
-        diag_stream.write(f"Auditing {len(filtered_files)} file(s) against api.github.com...\n")
-    else:
-        diag_stream.write(f"Auditing {len(filtered_files)} file(s) locally (offline emulator)...\n")
+    if not is_json:
+        if is_remote:
+            diag_stream.write(f"Auditing {len(filtered_files)} file(s) against api.github.com...\n")
+        else:
+            diag_stream.write(f"Auditing {len(filtered_files)} file(s) locally (offline emulator)...\n")
 
     total_errors = 0
+    total_warnings = 0
+    total_intended = 0
+    total_received = 0
     all_html_chunks: list[str] = []
+    json_files: list[dict[str, Any]] = []
 
     for file_path in filtered_files:
         try:
@@ -593,24 +776,51 @@ def cmd_verify(args: argparse.Namespace) -> int:
             return 2
 
         all_html_chunks.append(report.rendered_html)
-        diag_stream.write(f"{file_path}: Recognized {report.received_count}/{report.intended_count} math spans\n")
+        total_intended += report.intended_count
+        total_received += report.received_count
+        file_errors = sum(1 for i in report.issues if i.severity != "warning")
+        file_warnings = sum(1 for i in report.issues if i.severity == "warning")
+        total_errors += file_errors
+        total_warnings += file_warnings
 
-        for issue in report.issues:
-            if issue.severity != "warning":
-                total_errors += 1
-            if args.format == "github":
-                file_esc = _escape_workflow_property(str(file_path))
-                cat_esc = _escape_workflow_property(issue.category)
-                msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
-                level = "warning" if issue.severity == "warning" else "error"
-                diag_stream.write(f"::{level} file={file_esc},title={cat_esc}::{msg_esc}\n")
-            else:
-                diag_stream.write(f"{file_path}: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
-
-        if report.mermaid_previews:
-            diag_stream.write(
-                f"Rendered {len(report.mermaid_previews)} Mermaid preview(s) for {file_path} to {preview_dir}\n"
+        if is_json:
+            json_files.append(
+                {
+                    "file": str(file_path),
+                    "mode": report.mode,
+                    "intended_count": report.intended_count,
+                    "received_count": report.received_count,
+                    "issues": [_verification_issue_to_dict(i) for i in report.issues],
+                    "mermaid_previews": [str(p) for p in report.mermaid_previews],
+                }
             )
+        else:
+            diag_stream.write(f"{file_path}: Recognized {report.received_count}/{report.intended_count} math spans\n")
+            for issue in report.issues:
+                if args.format == "github":
+                    file_esc = _escape_workflow_property(str(file_path))
+                    cat_esc = _escape_workflow_property(issue.category)
+                    msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
+                    level = "warning" if issue.severity == "warning" else "error"
+                    diag_stream.write(f"::{level} file={file_esc},title={cat_esc}::{msg_esc}\n")
+                else:
+                    diag_stream.write(f"{file_path}: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
+
+            if report.mermaid_previews:
+                diag_stream.write(
+                    f"Rendered {len(report.mermaid_previews)} Mermaid preview(s) for {file_path} to {preview_dir}\n"
+                )
+
+    if is_json:
+        payload = _build_verify_json_payload(
+            mode="remote" if is_remote else "local",
+            files=json_files,
+            intended=total_intended,
+            received=total_received,
+            errors=total_errors,
+            warnings=total_warnings,
+        )
+        diag_stream.write(json.dumps(payload, indent=2) + "\n")
 
     combined_html = "\n<hr>\n".join(all_html_chunks)
 
@@ -618,17 +828,21 @@ def cmd_verify(args: argparse.Namespace) -> int:
         out_path = Path(args.html)
         full_html = build_preview_html(combined_html, title="GFM Math Verification")
         out_path.write_text(full_html, encoding="utf-8")
-        diag_stream.write(f"Wrote rendered HTML preview to {out_path}\n")
+        if not is_json:
+            diag_stream.write(f"Wrote rendered HTML preview to {out_path}\n")
 
     if args.browser:
         opened_path = open_in_browser(combined_html, title="GFM Math Verification")
-        diag_stream.write(f"Opened preview in browser ({opened_path})\n")
+        if not is_json:
+            diag_stream.write(f"Opened preview in browser ({opened_path})\n")
 
     if total_errors > 0:
-        sys.stderr.write(f"Verification failed: {total_errors} rendering anomaly(ies) detected.\n")
+        if not is_json:
+            sys.stderr.write(f"Verification failed: {total_errors} rendering anomaly(ies) detected.\n")
         return 1
 
-    diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")
+    if not is_json:
+        diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")
     return 0
 
 

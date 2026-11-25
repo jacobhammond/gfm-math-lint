@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-25
+
+### Added
+- **Unexplained Span-Diff Fallback (`GFM-E01`) & Telemetry (`linter.py`)**: Connected `emulate_gfm_document()` directly into `Linter.lint_string()`, populating `LintResult.span_diff` (`SpanDiffTelemetry`) and emitting `GFM-E01` whenever a GFM math span discrepancy (`span-dropped`, `span-mutated`, `span-count-mismatch`) is not already explained by `GFM-M01`–`GFM-M18` or `GFM-T01`.
+- **Rule `GFM-C03` (`unrendered-math-or-diagram-fence`)**: Detects unrendered mathematical equations (`dU/dt = -γ U + Σ P_k`, `U = |a|²`, raw LaTeX macros) and 2D ASCII box-drawing topology diagrams (`┌───┐ ───►`) inside unlabelled or `text`/`plaintext` code fences (while excluding `tree`/`eza` directory listings).
+- **Machine-Readable JSON Output (`--format json`)**: Added `--format json` across `check`, `fix`, `check-shell`, and `verify`, emitting structured diagnostics including `target` profile, `violations`, `fixed_violations`, `remaining_violations`, and `span_diff` telemetry.
+
 ## [0.3.0] - 2026-11-25
 
 ### Added
@@ -68,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
+[0.4.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.1...v0.1.2
