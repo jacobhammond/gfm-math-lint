@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from gfm_math_lint.rules.base import Rule, Violation
-from gfm_math_lint.rules.code_rules import RuleC01, RuleC02
+from gfm_math_lint.rules.code_rules import RuleC01, RuleC02, RuleC03
 from gfm_math_lint.rules.diagram_rules import RuleD01, RuleD02, RuleD03, RuleD04, RuleD05, RuleD06
 from gfm_math_lint.rules.math_rules import (
     RuleM01,
@@ -56,6 +56,7 @@ ALL_TABLE_RULES: list[Rule] = [
 ALL_CODE_RULES: list[Rule] = [
     RuleC01(),
     RuleC02(),
+    RuleC03(),
 ]
 
 ALL_DIAGRAM_RULES: list[Rule] = [
@@ -97,6 +98,7 @@ __all__ = [
     "Rule",
     "RuleC01",
     "RuleC02",
+    "RuleC03",
     "RuleD01",
     "RuleD02",
     "RuleD03",

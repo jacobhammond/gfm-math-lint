@@ -471,7 +471,6 @@ def emulate_gfm_document(markdown_content: str) -> EmulationResult:
             valid_display = (
                 zone.is_closed
                 and zone.indent_level == 0
-                and zone.parent_block != "list_item"
                 and not has_internal_blank
                 and not has_block_interrupt(stripped_inner)
                 and prev_valid

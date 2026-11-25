@@ -6,12 +6,13 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 from gfm_math_lint.config import LintConfig
+from gfm_math_lint.emulator import SpanDiff, emulate_gfm_document
 from gfm_math_lint.fixer import LintEdit, apply_edits, generate_unified_diff
 from gfm_math_lint.rules import ALL_MARKDOWN_RULES, Rule, Violation
 from gfm_math_lint.tokenizer import DocumentZone, Zone, scan_document_zones
@@ -133,6 +134,42 @@ class _ExpensiveReadonlyRule(Protocol):
     is_expensive_readonly: bool
 
 
+@dataclass(frozen=True)
+class SpanDiffTelemetry:
+    """Summary of differential math span emulation for a linted document."""
+
+    intended_count: int = 0
+    received_count: int = 0
+    diffs: list[SpanDiff] = field(default_factory=list)
+
+
+def violation_to_dict(v: Violation, file_path: str = "") -> dict[str, Any]:
+    """Serialize a `Violation` to a JSON-compatible dictionary."""
+    data: dict[str, Any] = {
+        "rule_id": v.rule_id,
+        "severity": v.severity,
+        "line": v.line,
+        "col": v.col,
+        "message": v.message,
+        "fixable": v.edit is not None,
+    }
+    if file_path:
+        data["file"] = file_path
+    return data
+
+
+def span_diff_to_dict(d: SpanDiff) -> dict[str, Any]:
+    """Serialize a `SpanDiff` to a JSON-compatible dictionary."""
+    return {
+        "category": d.category,
+        "message": d.message,
+        "intended": d.intended,
+        "received": d.received,
+        "line": d.line,
+        "display": d.display,
+    }
+
+
 @dataclass
 class LintResult:
     """Result of linting a file or string."""
@@ -145,6 +182,23 @@ class LintResult:
     modified: bool = False
     fixed_violations: list[Violation] = field(default_factory=list)
     remaining_violations: list[Violation] = field(default_factory=list)
+    span_diff: SpanDiffTelemetry = field(default_factory=SpanDiffTelemetry)
+
+    def to_json_dict(self, target: str = "dual") -> dict[str, Any]:
+        """Serialize this `LintResult` to a machine-readable JSON dictionary."""
+        return {
+            "file": self.file_path,
+            "target": target,
+            "modified": self.modified,
+            "violations": [violation_to_dict(v) for v in self.violations],
+            "fixed_violations": [violation_to_dict(v) for v in self.fixed_violations],
+            "remaining_violations": [violation_to_dict(v) for v in self.remaining_violations],
+            "span_diff": {
+                "intended_count": self.span_diff.intended_count,
+                "received_count": self.span_diff.received_count,
+                "diffs": [span_diff_to_dict(d) for d in self.span_diff.diffs],
+            },
+        }
 
 
 class Linter:
@@ -155,10 +209,32 @@ class Linter:
         config: LintConfig | None = None,
         rules: list[Rule] | None = None,
         root_dir: Path | None = None,
+        enable_span_diff_fallback: bool | None = None,
     ) -> None:
         self.config = config or LintConfig()
         self.rules = rules if rules is not None else ALL_MARKDOWN_RULES
         self.root_dir = root_dir or Path.cwd()
+        self.enable_span_diff_fallback = (
+            (rules is None) if enable_span_diff_fallback is None else enable_span_diff_fallback
+        )
+
+    def _collect_raw_rule_violations(
+        self,
+        lines: Sequence[str],
+        zones: list[DocumentZone],
+        file_path: str,
+        skip_expensive_readonly: bool = False,
+    ) -> list[Violation]:
+        raw_violations: list[Violation] = []
+        for rule in self.rules:
+            if self.config.is_rule_ignored(rule.id, file_path, self.root_dir):
+                continue
+            if skip_expensive_readonly and isinstance(rule, _ExpensiveReadonlyRule) and rule.is_expensive_readonly:
+                continue
+            if isinstance(rule, _TargetConfigurable):
+                rule.target = self.config.target
+            raw_violations.extend(rule.check(lines, zones, file_path))
+        return raw_violations
 
     def _collect_violations(
         self,
@@ -169,18 +245,84 @@ class Linter:
         skip_expensive_readonly: bool = False,
     ) -> list[Violation]:
         """Run active rules and filter inline suppressions."""
-        raw_violations: list[Violation] = []
-        for rule in self.rules:
-            if self.config.is_rule_ignored(rule.id, file_path, self.root_dir):
+        raw_violations = self._collect_raw_rule_violations(
+            lines, zones, file_path, skip_expensive_readonly=skip_expensive_readonly
+        )
+        filtered = [v for v in raw_violations if not suppression.is_suppressed(v.rule_id, v.line)]
+        return sorted(filtered, key=lambda v: (v.line, v.col))
+
+    def _collect_span_diff_fallback(
+        self,
+        content: str,
+        zones: list[DocumentZone],
+        raw_rule_violations: list[Violation],
+        suppression: SuppressionManager,
+        file_path: str,
+    ) -> tuple[SpanDiffTelemetry, list[Violation]]:
+        """Run differential emulator and emit GFM-E01 for any unexplained span discrepancy."""
+        emu = emulate_gfm_document(content)
+        telemetry = SpanDiffTelemetry(
+            intended_count=len(emu.intended_spans),
+            received_count=len(emu.received_spans),
+            diffs=list(emu.diffs),
+        )
+        if (
+            not self.enable_span_diff_fallback
+            or self.config.is_rule_ignored("GFM-E01", file_path, self.root_dir)
+            or not emu.diffs
+        ):
+            return telemetry, []
+
+        math_table_lines = {v.line for v in raw_rule_violations if v.rule_id.startswith(("GFM-M", "GFM-T"))}
+        display_zone_ranges: dict[int, tuple[int, int]] = {
+            z.start_line: (z.start_line, z.end_line) for z in zones if z.zone_type == Zone.DISPLAY_MATH
+        }
+
+        def _is_covered(line_no: int, is_display: bool) -> bool:
+            if line_no in math_table_lines:
+                return True
+            if is_display and line_no in display_zone_ranges:
+                start_ln, end_ln = display_zone_ranges[line_no]
+                return any(start_ln <= ln <= end_ln for ln in math_table_lines)
+            return False
+
+        fallback: list[Violation] = []
+        per_span_diffs = [d for d in emu.diffs if d.category in ("span-dropped", "span-mutated") and d.line > 0]
+        for d in per_span_diffs:
+            if _is_covered(d.line, d.display):
                 continue
-            if skip_expensive_readonly and isinstance(rule, _ExpensiveReadonlyRule) and rule.is_expensive_readonly:
+            if suppression.is_suppressed("GFM-E01", d.line):
                 continue
-            if isinstance(rule, _TargetConfigurable):
-                rule.target = self.config.target
-            for v in rule.check(lines, zones, file_path):
-                if not suppression.is_suppressed(v.rule_id, v.line):
-                    raw_violations.append(v)
-        return sorted(raw_violations, key=lambda v: (v.line, v.col))
+            fallback.append(
+                Violation(
+                    rule_id="GFM-E01",
+                    message=f"Unexplained GFM math span discrepancy ({d.category}): {d.message}",
+                    line=d.line,
+                    col=1,
+                    severity="error",
+                    edit=None,
+                )
+            )
+
+        if (
+            not per_span_diffs
+            and any(d.category == "span-count-mismatch" for d in emu.diffs)
+            and not math_table_lines
+            and not suppression.is_suppressed("GFM-E01", 1)
+        ):
+            mismatch = next(d for d in emu.diffs if d.category == "span-count-mismatch")
+            fallback.append(
+                Violation(
+                    rule_id="GFM-E01",
+                    message=f"Unexplained GFM math span discrepancy ({mismatch.category}): {mismatch.message}",
+                    line=1,
+                    col=1,
+                    severity="error",
+                    edit=None,
+                )
+            )
+
+        return telemetry, fallback
 
     def lint_string(
         self,
@@ -193,7 +335,15 @@ class Linter:
         zones = scan_document_zones(lines)
         suppression = SuppressionManager.parse_from_lines(lines, zones)
 
-        sorted_violations = self._collect_violations(lines, zones, suppression, file_path)
+        raw_initial = self._collect_raw_rule_violations(lines, zones, file_path)
+        rule_violations = sorted(
+            (v for v in raw_initial if not suppression.is_suppressed(v.rule_id, v.line)),
+            key=lambda v: (v.line, v.col),
+        )
+        initial_telemetry, initial_fallback = self._collect_span_diff_fallback(
+            content, zones, raw_initial, suppression, file_path
+        )
+        sorted_violations = sorted([*rule_violations, *initial_fallback], key=lambda v: (v.line, v.col))
 
         if not fix:
             return LintResult(
@@ -205,6 +355,7 @@ class Linter:
                 modified=False,
                 fixed_violations=[],
                 remaining_violations=sorted_violations,
+                span_diff=initial_telemetry,
             )
 
         # Iterative fix application: resolve overlapping edits until convergence (max 5 passes)
@@ -254,17 +405,27 @@ class Linter:
 
         if current_content == content:
             post_violations = sorted_violations
+            final_telemetry = initial_telemetry
         else:
             post_lines = current_content.splitlines(keepends=True)
             post_zones = scan_document_zones(post_lines)
             post_suppression = SuppressionManager.parse_from_lines(post_lines, post_zones)
-            post_violations = self._collect_violations(post_lines, post_zones, post_suppression, file_path)
+            raw_post = self._collect_raw_rule_violations(post_lines, post_zones, file_path)
+            post_rule_violations = sorted(
+                (v for v in raw_post if not post_suppression.is_suppressed(v.rule_id, v.line)),
+                key=lambda v: (v.line, v.col),
+            )
+            final_telemetry, post_fallback = self._collect_span_diff_fallback(
+                current_content, post_zones, raw_post, post_suppression, file_path
+            )
+            post_violations = sorted([*post_rule_violations, *post_fallback], key=lambda v: (v.line, v.col))
 
         # Safe-Fix Guard (REG-22): roll back if fixing introduces a net-new unfixable violation
         initial_rule_ids = {v.rule_id for v in sorted_violations}
         if current_content != content and any(v.rule_id not in initial_rule_ids for v in post_violations):
             current_content = content
             post_violations = sorted_violations
+            final_telemetry = initial_telemetry
 
         if current_content == content:
             fixed_violations: list[Violation] = []
@@ -295,6 +456,7 @@ class Linter:
             modified=(current_content != content),
             fixed_violations=fixed_violations,
             remaining_violations=remaining_violations,
+            span_diff=final_telemetry,
         )
 
     def lint_file(

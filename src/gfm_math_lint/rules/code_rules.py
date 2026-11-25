@@ -1,4 +1,4 @@
-"""GFM Code Block and Inline Code Span rules (GFM-C01, GFM-C02)."""
+"""GFM Code Block and Inline Code Span rules (GFM-C01, GFM-C02, GFM-C03)."""
 
 from __future__ import annotations
 
@@ -17,6 +17,21 @@ FENCE_LINE_RE = re.compile(r"^( {0,3})(`{3,}|~{3,})(.*)$")
 NESTED_MATH_SPAN_RE = re.compile(r"(?<!`)`(\$`[^`*\s][^`*\n]*[^`*\s]`\$)`(?!`)")
 NESTED_FENCE_SPAN_RE = re.compile(r"(?<!`)`( {1,3}`{3,}[^`]*?)`(?!`)")
 BACKTICK_RUN_RE = re.compile(r"`+")
+
+_PLAIN_FENCE_INFO: frozenset[str] = frozenset({"", "text", "plaintext", "txt"})
+_TREE_LISTING_RE = re.compile(r"[\u251c\u2514]\u2500\u2500")
+_BOX_ARROW_RE = re.compile(r"(?:[\u25ba\u25c4\u25b2\u25bc\u2192\u2190\u2191\u2193]|-->|<--|->|<-|==>)")
+_ASCII_BOX_BORDER_RE = re.compile(r"\+-{3,}\+")
+_ASCII_BOX_PIPE_RE = re.compile(r"\|[^|\n]+\|")
+_EQ_REL_RE = re.compile(r"(?:=|[\u2248\u2264\u2265\u2261])")
+_UNICODE_MATH_GLYPH_RE = re.compile(
+    r"[\u0391-\u03a9\u03b1-\u03c9\u2202\u2207\u2211\u220f\u221a\u222b\u00b1\u00b7\u2212\u00b2\u00b3\u00b9\u00bd\u00bc\u00be]"
+)
+_DIFF_RATIO_RE = re.compile(r"\bd[A-Za-z_]\w*/d[A-Za-z_]\w*\b")
+_RAW_LATEX_CMD_RE = re.compile(
+    r"\\(?:frac|sqrt|sum|int|partial|alpha|beta|gamma|delta|Delta|Sigma|omega|begin|mathrm|text)\b"
+)
+_BQ_PREFIX_RE = re.compile(r"^\s*(?:>\s*)+")
 
 
 class RuleC01(Rule):
@@ -174,5 +189,102 @@ class RuleC02(Rule):
                                 edit=edit,
                             )
                         )
+
+        return violations
+
+
+def _is_ascii_box_diagram(text: str) -> bool:
+    """Return True if `text` looks like a 2D ASCII/Unicode box-drawing diagram (excluding file trees)."""
+    has_unicode_top = (
+        ("\u250c" in text and "\u2510" in text)
+        or ("\u2554" in text and "\u2557" in text)
+        or ("\u256d" in text and "\u256e" in text)
+    )
+    has_unicode_bottom = (
+        ("\u2514" in text and "\u2518" in text)
+        or ("\u255a" in text and "\u255d" in text)
+        or ("\u2570" in text and "\u256f" in text)
+    )
+    ascii_borders = len(_ASCII_BOX_BORDER_RE.findall(text))
+    has_ascii_box = ascii_borders >= 1 and bool(_ASCII_BOX_PIPE_RE.search(text))
+
+    if _TREE_LISTING_RE.search(text) and not (has_unicode_top or has_ascii_box):
+        return False
+
+    has_flow = bool(_BOX_ARROW_RE.search(text))
+    if has_unicode_top and (has_unicode_bottom or has_flow):
+        return True
+    return has_ascii_box and (ascii_borders >= 2 or has_flow)
+
+
+def _has_unrendered_math(lines: Sequence[str]) -> bool:
+    """Return True if plain-text fence lines contain mathematical equations or LaTeX macros."""
+    for ln in lines:
+        if "gfm-math-lint" in ln:
+            continue
+        if _RAW_LATEX_CMD_RE.search(ln):
+            return True
+        if _EQ_REL_RE.search(ln) and (_UNICODE_MATH_GLYPH_RE.search(ln) or _DIFF_RATIO_RE.search(ln)):
+            return True
+    return False
+
+
+class RuleC03(Rule):
+    """GFM-C03: Unrendered Math or 2D ASCII Box Diagram Inside Plain-Text Code Fence."""
+
+    id: str = "GFM-C03"
+    name: str = "unrendered-math-or-diagram-fence"
+    description: str = "Detect mathematical equations or 2D ASCII box-drawing diagrams inside plain-text code fences"
+    severity: str = "warning"
+
+    def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+        violations: list[Violation] = []
+
+        for zone in zones:
+            if zone.zone_type != Zone.FENCED_CODE or not zone.is_closed or zone.fence_len < 3:
+                continue
+            if zone.info.strip().lower() not in _PLAIN_FENCE_INFO:
+                continue
+
+            inner_lines = zone.lines[1:-1] if len(zone.lines) >= 2 else []
+            if not inner_lines:
+                continue
+
+            cleaned = [
+                _BQ_PREFIX_RE.sub("", ln) if (zone.parent_block == "blockquote" or ln.lstrip().startswith(">")) else ln
+                for ln in inner_lines
+            ]
+            body = "".join(cleaned)
+
+            if _is_ascii_box_diagram(body):
+                violations.append(
+                    Violation(
+                        rule_id=self.id,
+                        message=(
+                            "Plain-text code fence contains a 2D ASCII box-drawing diagram. "
+                            "Convert to a '```mermaid' diagram or suppress with "
+                            "'<!-- gfm-math-lint-disable GFM-C03 -->'."
+                        ),
+                        line=zone.start_line,
+                        col=1,
+                        severity=self.severity,
+                        edit=None,
+                    )
+                )
+            elif _has_unrendered_math(cleaned):
+                violations.append(
+                    Violation(
+                        rule_id=self.id,
+                        message=(
+                            "Plain-text code fence contains unrendered mathematical equations. "
+                            "Convert to '$$ ... $$' display math or suppress with "
+                            "'<!-- gfm-math-lint-disable GFM-C03 -->'."
+                        ),
+                        line=zone.start_line,
+                        col=1,
+                        severity=self.severity,
+                        edit=None,
+                    )
+                )
 
         return violations

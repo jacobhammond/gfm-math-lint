@@ -55,11 +55,15 @@ Data container holding violations and transformed content.
 - **`original_content`** (`str`): Original Markdown input.
 - **`fixed_content`** (`str`): Markdown string with all fixes applied (identical to `original_content` if `fix=False` or no fixes were applicable).
 - **`violations`** (`list[Violation]`): List of detected violations.
+- **`fixed_violations`** (`list[Violation]`): Violations resolved by auto-fix.
+- **`remaining_violations`** (`list[Violation]`): Violations remaining after auto-fix.
+- **`span_diff`** (`SpanDiffTelemetry`): Differential math span telemetry (`intended_count`, `received_count`, `diffs`).
 - **`has_violations`** (`bool`): `True` if one or more violations were detected.
 - **`has_fixes`** (`bool`): `True` if any fixes were computed and `fixed_content != original_content`.
 
 #### Methods:
 - **`diff() -> str`**: Returns a standard unified diff comparing `original_content` against `fixed_content`.
+- **`to_json_dict(target: str = "dual") -> dict[str, Any]`**: Returns a JSON-serializable dictionary of violations, fixes, and `span_diff` telemetry.
 
 ---
 

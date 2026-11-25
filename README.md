@@ -36,7 +36,7 @@ Comprehensive technical guides, API references, and architectural records are ma
 | 🗺️ **[Development Roadmap & Retrospective](ROADMAP.md)** | Multi-phase development roadmap, Dual-Engine compatibility matrix, and Conformance Crucible gating harness. |
 | 🏛️ **[Architecture & Engine Design](docs/architecture.md)** | 8-zone lexical state machine, multi-stage compilation pipeline, reverse-offset edit algebra, and verification mechanics. |
 | 🐍 **[Python API Reference & Recipes](docs/api.md)** | Programmatic library reference (`Linter`, `LintResult`, `LintConfig`, `Verifier`) with recipes for pytest, CI, and Sphinx/MkDocs. |
-| 📖 **[Complete Rule Catalog & Authoring Guide](docs/rules.md)** | In-depth specifications for all 28 rules, CommonMark/KaTeX failure mode mechanics, and custom rule development tutorial. |
+| 📖 **[Complete Rule Catalog & Authoring Guide](docs/rules.md)** | In-depth specifications for all 29 rules (+ `GFM-E01` fallback), CommonMark/KaTeX failure mode mechanics, and custom rule development tutorial. |
 | 📋 **[Architectural Decision Records (ADRs)](docs/adr/README.md)** | Technical justifications for zero-dependency stdlib, reverse-offset edit algebra, state-machine tokenization, and live GitHub API verification. |
 
 ---
@@ -69,6 +69,9 @@ gfm-math-lint check docs/ README.md
 
 # Output violations in GitHub Actions workflow command format (::warning / ::error)
 gfm-math-lint check --format github docs/
+
+# Output machine-readable JSON diagnostics (including span_diff telemetry)
+gfm-math-lint check --format json docs/
 
 # Preview automated fixes as a unified diff without modifying files
 gfm-math-lint check --diff docs/
@@ -185,7 +188,7 @@ Add `gfm-math-lint` to your `.pre-commit-config.yaml` to enforce valid equations
 ```yaml
 repos:
   - repo: https://github.com/jacobhammond/gfm-math-lint
-    rev: v0.3.0
+    rev: v0.4.0
     hooks:
       # Validates math, table, code fence, and boundary issues
       - id: gfm-math-lint
@@ -267,6 +270,8 @@ The following rules are enforced by `gfm-math-lint`. For detailed failure mode e
 | `GFM-T01` | Tables | `table-pipe-collision` | Error | Yes | [Details](docs/rules.md#gfm-t01-table-pipe-collision) |
 | `GFM-C01` | Code | `fence-nesting-length` | Error | Yes | [Details](docs/rules.md#gfm-c01-fence-nesting-length) |
 | `GFM-C02` | Code | `inline-code-backtick-nesting` | Error | Yes | [Details](docs/rules.md#gfm-c02-inline-code-backtick-nesting) |
+| `GFM-C03` | Code | `unrendered-math-or-diagram-fence` | Warning | No | [Details](docs/rules.md#gfm-c03-unrendered-math-or-diagram-fence) |
+| `GFM-E01` | Emulator | `unexplained-span-diff` | Error | No | [Details](docs/rules.md#gfm-e01-unexplained-span-diff) |
 | `GFM-D01` | Diagrams | `mermaid-identifier` | Warning | No | [Details](docs/rules.md#gfm-d01-mermaid-identifier) |
 | `GFM-D02` | Diagrams | `fence-boundary-symmetry` | Error | Yes | [Details](docs/rules.md#gfm-d02-fence-boundary-symmetry) |
 | `GFM-D03` | Diagrams | `mermaid-newline-linebreak` | Error | Yes | [Details](docs/rules.md#gfm-d03-mermaid-newline-linebreak) |

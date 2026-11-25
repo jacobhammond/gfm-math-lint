@@ -9,7 +9,7 @@ from importlib import metadata
 from typing import TYPE_CHECKING, Any
 
 from gfm_math_lint.config import LintConfig, load_config
-from gfm_math_lint.linter import Linter, LintResult
+from gfm_math_lint.linter import Linter, LintResult, SpanDiffTelemetry
 from gfm_math_lint.rules.base import Rule, Violation
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 try:
     __version__ = metadata.version("gfm-math-lint")
 except metadata.PackageNotFoundError:
-    __version__ = "0.3.0"
+    __version__ = "0.4.0"
 
 __all__: list[str] = [
     "LaTeXIssue",
@@ -37,6 +37,7 @@ __all__: list[str] = [
     "Linter",
     "ProbeReport",
     "Rule",
+    "SpanDiffTelemetry",
     "VerificationIssue",
     "VerificationReport",
     "Violation",

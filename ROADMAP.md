@@ -801,7 +801,7 @@ flowchart LR
 
 ---
 
-### Phase 4: Full Diff-Explainer Unification, `GFM-C03` & Machine-Readable Output (v0.4.0)
+### Phase 4: Full Diff-Explainer Unification, `GFM-C03` & Machine-Readable Output (v0.4.0) — **[COMPLETED]**
 **Goal:** Surface unexplained differential span discrepancies directly during `check`, detect unrendered math/diagrams locked inside plain-text fences (`GFM-C03`), and emit structured JSON diagnostics.
 
 #### PR 4.1: Unexplained Span-Diff Fallback in `Linter` (`emulator.py` $\to$ `Linter`)
