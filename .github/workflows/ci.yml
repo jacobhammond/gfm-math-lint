@@ -112,6 +112,18 @@ jobs:
           /tmp/smoke-venv/bin/gfm-math-lint --version
           /tmp/smoke-venv/bin/gfm-math-lint check README.md
 
+      - name: Smoke test composite GitHub Action (local source)
+        uses: ./actions/gfm-math-lint-action
+        with:
+          mode: check
+          paths: "README.md docs/safe-subset-cheatsheet.md"
+          format: github
+          json-output: "/tmp/gfm-action-smoke.json"
+          version: "local"
+
+      - name: Verify action JSON report output
+        run: python3 -c "import json, pathlib; d = json.loads(pathlib.Path('/tmp/gfm-action-smoke.json').read_text(encoding='utf-8')); assert d['command'] == 'check' and d['summary']['total_violations'] == 0"
+
   test:
     name: test
     needs: [matrix-test, smoke-install]

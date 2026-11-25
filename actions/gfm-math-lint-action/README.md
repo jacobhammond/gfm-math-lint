@@ -9,9 +9,9 @@ Composite GitHub Action for running **gfm-math-lint** in CI workflows: lint Mark
 | `mode` | `"check"` | CLI subcommand: `check`, `fix`, `verify`, `probe`, or `check-shell`. |
 | `paths` | `"."` | Space-separated files or directories to inspect (ignored in `probe` mode). |
 | `target` | `"dual"` | Rendering engine profile (`dual`, `github`, or `vscode`) for `check` / `fix`. |
-| `format` | `"github"` | Diagnostic output format (`github`, `text`, or `json`). |
+| `format` | `"github"` | Diagnostic output format (`github`, `text`, or `json`). `probe` mode supports `text` and `json`. |
 | `config` | `""` | Optional path to a `pyproject.toml` configuration file. |
-| `version` | `""` | PyPI version (e.g., `"1.0.0"`), `"local"` to install from action repo source, or empty for latest PyPI release. |
+| `version` | `"1.0.0"` | PyPI version (default `"1.0.0"`), `"latest"` for unpinned PyPI, or `"local"` to install from action repo source. |
 | `python-version` | `"3.11"` | Python version provisioned via `uv`. |
 | `remote-verify` | `"false"` | Pass `--remote` to `verify` (transmits markdown to GitHub `/markdown` API). |
 | `offline-probe` | `"false"` | Pass `--offline` to `probe`. |

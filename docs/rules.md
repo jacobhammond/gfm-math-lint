@@ -221,7 +221,7 @@ class RuleCustom01(Rule):
                 for idx, line in enumerate(zone.lines):
                     line_no = zone.start_line + idx
                     for span in scan_inline_spans(line, line_no):
-                        if span.span_type == "inline_math" and "\\foo" in span.content:
+                        if span.zone_type == Zone.INLINE_MATH and "\\foo" in span.content:
                             violations.append(
                                 Violation(
                                     rule_id=self.id,

@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 
 SAFE_SUBSET_DOCS_URL = "https://github.com/jacobhammond/gfm-math-lint/blob/main/docs/safe-subset-cheatsheet.md"
-RULE_DOCS_BASE_URL = "https://github.com/jacobhammond/gfm-math-lint/blob/main/docs/rules.md"
 
 _RULE_CHEATSHEET_ANCHORS: dict[str, str] = {
     "GFM-M05": "#letter-named-macros",
@@ -55,6 +54,22 @@ def get_safe_subset_url(rule_id: str | None = None) -> str:
         return SAFE_SUBSET_DOCS_URL
     anchor = _RULE_CHEATSHEET_ANCHORS.get(rule_id.upper(), "")
     return f"{SAFE_SUBSET_DOCS_URL}{anchor}"
+
+
+def get_verification_docs_url(category: str | None = None) -> str:
+    """Return the Safe Subset Cheat Sheet URL for a `VerificationIssue.category`."""
+    if not category:
+        return SAFE_SUBSET_DOCS_URL
+    cat = category.lower()
+    if cat.startswith("span-"):
+        return f"{SAFE_SUBSET_DOCS_URL}#github-probe-ground-truth"
+    if cat.startswith("mermaid-"):
+        return f"{SAFE_SUBSET_DOCS_URL}#mermaid-diagrams"
+    if cat.startswith("table-"):
+        return f"{SAFE_SUBSET_DOCS_URL}#inline-math-and-tables"
+    if cat.startswith(("katex-", "latex-", "unrendered-", "tag-")):
+        return f"{SAFE_SUBSET_DOCS_URL}#letter-named-macros"
+    return SAFE_SUBSET_DOCS_URL
 
 
 @dataclass(frozen=True)

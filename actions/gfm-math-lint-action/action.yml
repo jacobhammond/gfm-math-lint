@@ -20,7 +20,7 @@ inputs:
     required: false
     default: "dual"
   format:
-    description: "Diagnostic output format: github, text, or json."
+    description: "Diagnostic output format: github, text, or json (probe supports text and json)."
     required: false
     default: "github"
   config:
@@ -28,9 +28,9 @@ inputs:
     required: false
     default: ""
   version:
-    description: "gfm-math-lint version to install from PyPI (e.g. '1.0.0'), 'local' for action repo source, or empty for latest."
+    description: "gfm-math-lint version to install from PyPI (default: '1.0.0'), 'latest' for unpinned PyPI, or 'local' for action repo source."
     required: false
-    default: ""
+    default: "1.0.0"
   python-version:
     description: "Python version to provision with uv."
     required: false
@@ -91,10 +91,10 @@ runs:
         uv venv "$VENV_DIR"
         if [ "$INPUT_VERSION" = "local" ]; then
           uv pip install --python "$VENV_DIR/bin/python" "$ACTION_PATH/../.."
-        elif [ -n "$INPUT_VERSION" ]; then
-          uv pip install --python "$VENV_DIR/bin/python" "gfm-math-lint==$INPUT_VERSION"
-        else
+        elif [ -z "$INPUT_VERSION" ] || [ "$INPUT_VERSION" = "latest" ]; then
           uv pip install --python "$VENV_DIR/bin/python" "gfm-math-lint"
+        else
+          uv pip install --python "$VENV_DIR/bin/python" "gfm-math-lint==$INPUT_VERSION"
         fi
 
     - name: Run gfm-math-lint
@@ -117,7 +117,9 @@ runs:
         PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
         set -uo pipefail
-        BIN="$RUNNER_TEMP/gfm-math-lint-venv/bin/gfm-math-lint"
+        VENV_DIR="$RUNNER_TEMP/gfm-math-lint-venv"
+        PY="$VENV_DIR/bin/python"
+        BIN="$VENV_DIR/bin/gfm-math-lint"
 
         case "$INPUT_MODE" in
           check|fix|verify|probe|check-shell) ;;
@@ -143,17 +145,33 @@ runs:
             ;;
         esac
 
-        cmd=("$BIN" "$INPUT_MODE")
+        path_args=()
+        if [ "$INPUT_MODE" != "probe" ] && [ -n "$INPUT_PATHS" ]; then
+          while IFS= read -r -d '' p; do
+            path_args+=("$p")
+          done < <("$PY" -c 'import os, shlex, sys; sys.stdout.write("\0".join(shlex.split(os.environ.get("INPUT_PATHS", ""))) + "\0")')
+        fi
 
+        need_json=0
+        if [ -n "$INPUT_JSON_OUTPUT" ] || [ "$INPUT_POST_COMMENT" = "true" ]; then
+          need_json=1
+        fi
+
+        run_format="$INPUT_FORMAT"
+        if [ "$need_json" -eq 1 ]; then
+          run_format="json"
+        fi
+
+        cmd=("$BIN" "$INPUT_MODE")
         if [ "$INPUT_MODE" = "check" ] || [ "$INPUT_MODE" = "fix" ]; then
-          cmd+=("--target" "$INPUT_TARGET" "--format" "$INPUT_FORMAT")
+          cmd+=("--target" "$INPUT_TARGET" "--format" "$run_format")
           if [ -n "$INPUT_CONFIG" ]; then
             cmd+=("--config" "$INPUT_CONFIG")
           fi
         elif [ "$INPUT_MODE" = "check-shell" ]; then
-          cmd+=("--format" "$INPUT_FORMAT")
+          cmd+=("--format" "$run_format")
         elif [ "$INPUT_MODE" = "verify" ]; then
-          cmd+=("--format" "$INPUT_FORMAT")
+          cmd+=("--format" "$run_format")
           if [ -n "$INPUT_CONFIG" ]; then
             cmd+=("--config" "$INPUT_CONFIG")
           fi
@@ -167,7 +185,7 @@ runs:
             cmd+=("--no-katex")
           fi
         elif [ "$INPUT_MODE" = "probe" ]; then
-          if [ "$INPUT_FORMAT" = "json" ]; then
+          if [ "$run_format" = "json" ]; then
             cmd+=("--format" "json")
           fi
           if [ "$INPUT_OFFLINE_PROBE" = "true" ]; then
@@ -175,69 +193,130 @@ runs:
           fi
         fi
 
-        if [ "$INPUT_MODE" != "probe" ]; then
-          read -r -a path_args <<< "$INPUT_PATHS"
+        if [ "$INPUT_MODE" != "probe" ] && [ "${#path_args[@]}" -gt 0 ]; then
           cmd+=("${path_args[@]}")
         fi
 
-        set +e
-        "${cmd[@]}"
-        exit_code=$?
-        set -e
-
         report_path=""
-        if [ -n "$INPUT_JSON_OUTPUT" ]; then
-          mkdir -p "$(dirname "$INPUT_JSON_OUTPUT")"
-          json_cmd=("$BIN" "$INPUT_MODE")
-          if [ "$INPUT_MODE" = "check" ] || [ "$INPUT_MODE" = "fix" ]; then
-            json_cmd+=("--target" "$INPUT_TARGET" "--format" "json")
-            if [ -n "$INPUT_CONFIG" ]; then
-              json_cmd+=("--config" "$INPUT_CONFIG")
-            fi
-          elif [ "$INPUT_MODE" = "check-shell" ]; then
-            json_cmd+=("--format" "json")
-          elif [ "$INPUT_MODE" = "verify" ]; then
-            json_cmd+=("--format" "json")
-            if [ -n "$INPUT_CONFIG" ]; then
-              json_cmd+=("--config" "$INPUT_CONFIG")
-            fi
-            if [ "$INPUT_REMOTE_VERIFY" = "true" ]; then
-              json_cmd+=("--remote")
-            fi
-            if [ "$INPUT_STRICT_KATEX" = "true" ]; then
-              json_cmd+=("--strict-katex")
-            fi
-            if [ "$INPUT_NO_KATEX" = "true" ]; then
-              json_cmd+=("--no-katex")
-            fi
-          elif [ "$INPUT_MODE" = "probe" ]; then
-            json_cmd+=("--format" "json")
-            if [ "$INPUT_OFFLINE_PROBE" = "true" ]; then
-              json_cmd+=("--offline")
-            fi
+        if [ "$need_json" -eq 1 ]; then
+          if [ -n "$INPUT_JSON_OUTPUT" ]; then
+            mkdir -p "$(dirname "$INPUT_JSON_OUTPUT")"
+            json_file="$INPUT_JSON_OUTPUT"
+            report_path="$INPUT_JSON_OUTPUT"
+          else
+            json_file="$RUNNER_TEMP/gfm-math-lint-report.json"
           fi
-          if [ "$INPUT_MODE" != "probe" ]; then
-            json_cmd+=("${path_args[@]}")
-          fi
-          "${json_cmd[@]}" > "$INPUT_JSON_OUTPUT" || true
-          report_path="$INPUT_JSON_OUTPUT"
-        fi
 
-        if [ "$INPUT_POST_COMMENT" = "true" ] && [ "$exit_code" -ne 0 ] && [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
-          comment_file="$RUNNER_TEMP/gfm-math-lint-comment.md"
-          {
-            echo "## gfm-math-lint Report (\`$INPUT_MODE\`)"
-            echo ""
-            echo "- **Target profile:** \`$INPUT_TARGET\`"
-            echo "- **Exit code:** \`$exit_code\`"
-            echo "- **Reference:** [Safe Subset Cheat Sheet](https://github.com/jacobhammond/gfm-math-lint/blob/main/docs/safe-subset-cheatsheet.md)"
-          } > "$comment_file"
-          "$BIN" comment --pr "$PR_NUMBER" --file "$comment_file"
+          set +e
+          "${cmd[@]}" > "$json_file"
+          exit_code=$?
+          set -e
+
+          if [ "$INPUT_FORMAT" = "json" ]; then
+            cat "$json_file"
+          else
+            REPORT_JSON_FILE="$json_file" "$PY" - << 'PYEOF'
+        import json, os, sys
+        from gfm_math_lint.linter import _escape_workflow_data, _escape_workflow_property
+
+        path = os.environ["REPORT_JSON_FILE"]
+        fmt = os.environ.get("INPUT_FORMAT", "github")
+        mode = os.environ.get("INPUT_MODE", "check")
+        try:
+            data = json.loads(open(path, encoding="utf-8").read())
+        except Exception:
+            sys.exit(0)
+
+        if mode in ("check", "fix"):
+            for f in data.get("files", []):
+                fpath = f.get("file", "")
+                if mode == "fix" and f.get("modified") and fmt == "text":
+                    print(f"Fixed {len(f.get('fixed_violations', []))} violation(s) in {fpath}")
+                for v in f.get("remaining_violations", []):
+                    if fmt == "github":
+                        print(f"::{v.get('severity', 'error')} file={_escape_workflow_property(fpath)},line={v.get('line', 1)},col={v.get('col', 1)},title={_escape_workflow_property(v.get('rule_id', ''))}::{_escape_workflow_data(v.get('message', ''))}")
+                    else:
+                        print(f"{fpath}:{v.get('line', 1)}:{v.get('col', 1)}: [{v.get('rule_id', '')}] ({v.get('severity', 'error')}) {v.get('message', '')}")
+        elif mode == "check-shell":
+            for f in data.get("files", []):
+                fpath = f.get("file", "")
+                for v in f.get("violations", []):
+                    if fmt == "github":
+                        print(f"::{v.get('severity', 'error')} file={_escape_workflow_property(fpath)},line={v.get('line', 1)},col={v.get('col', 1)},title={_escape_workflow_property(v.get('rule_id', ''))}::{_escape_workflow_data(v.get('message', ''))}")
+                    else:
+                        print(f"{fpath}:{v.get('line', 1)}:{v.get('col', 1)}: [{v.get('rule_id', '')}] ({v.get('severity', 'error')}) {v.get('message', '')}")
+        elif mode == "verify":
+            for f in data.get("files", []):
+                fpath = f.get("file", "")
+                if fmt == "text":
+                    print(f"{fpath}: Recognized {f.get('received_count', 0)}/{f.get('intended_count', 0)} math spans")
+                for iss in f.get("issues", []):
+                    if fmt == "github":
+                        lvl = "warning" if iss.get("severity") == "warning" else "error"
+                        print(f"::{lvl} file={_escape_workflow_property(fpath)},title={_escape_workflow_property(iss.get('category', ''))}::{_escape_workflow_data(iss.get('message', ''))}")
+                    else:
+                        print(f"{fpath}: [{iss.get('category', '')}] {iss.get('message', '')}")
+        elif mode == "probe":
+            print(f"GFM Probe Calibration ({data.get('mode', 'remote')} mode): {data.get('passed', 0)}/{data.get('total', 0)} passed")
+        PYEOF
+          fi
+        else
+          set +e
+          "${cmd[@]}"
+          exit_code=$?
+          set -e
         fi
 
         {
           echo "exit-code=$exit_code"
           echo "report-path=$report_path"
         } >> "$GITHUB_OUTPUT"
+
+        if [ "$INPUT_POST_COMMENT" = "true" ] && [ "$exit_code" -ne 0 ] && [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+          comment_file="$RUNNER_TEMP/gfm-math-lint-comment.md"
+          REPORT_JSON_FILE="$json_file" ACTION_EXIT_CODE="$exit_code" "$PY" - << 'PYEOF' > "$comment_file"
+        import json, os
+
+        mode = os.environ.get("INPUT_MODE", "check")
+        target = os.environ.get("INPUT_TARGET", "dual")
+        exit_code = os.environ.get("ACTION_EXIT_CODE", "1")
+        path = os.environ["REPORT_JSON_FILE"]
+        lines = [
+            f"## gfm-math-lint Report (`{mode}`)",
+            "",
+            f"- **Target profile:** `{target}`",
+            f"- **Exit code:** `{exit_code}`",
+        ]
+        try:
+            data = json.loads(open(path, encoding="utf-8").read())
+            summary = data.get("summary", {})
+            if summary:
+                summary_parts = ", ".join(f"{k}: `{v}`" for k, v in summary.items())
+                lines.append(f"- **Summary:** {summary_parts}")
+            findings = []
+            for f in data.get("files", []):
+                fpath = f.get("file", "")
+                for v in f.get("remaining_violations", f.get("violations", [])):
+                    findings.append(f"- `{fpath}:{v.get('line', 1)}` **[{v.get('rule_id', '')}]** {v.get('message', '')}")
+                for iss in f.get("issues", []):
+                    findings.append(f"- `{fpath}` **[{iss.get('category', '')}]** {iss.get('message', '')}")
+            if findings:
+                lines.append("")
+                lines.append("### Findings")
+                lines.extend(findings[:20])
+                if len(findings) > 20:
+                    lines.append(f"- ...and {len(findings) - 20} more.")
+        except Exception:
+            pass
+        lines.extend([
+            "",
+            "- **Reference:** [Safe Subset Cheat Sheet](https://github.com/jacobhammond/gfm-math-lint/blob/main/docs/safe-subset-cheatsheet.md)",
+        ])
+        print("\n".join(lines))
+        PYEOF
+          if ! "$BIN" comment --pr "$PR_NUMBER" --file "$comment_file"; then
+            echo "::warning::Failed to post PR summary comment (ensure pull-requests: write permission)."
+          fi
+        fi
 
         exit "$exit_code"

@@ -35,7 +35,7 @@ GitHub runs CommonMark §2.4 backslash-punctuation stripping inside `$...$` and 
 
 - **No inner whitespace (`GFM-M04`):** Write `$x$`, never `$ x $`.
 - **Clean boundaries (`GFM-M13`):** Leave whitespace or punctuation outside `$...$` (`base $e$`, `$15^\circ$ C`, `$A\text{–}B$`). Never glue `$` to hyphens or alphanumerics (`base-$e$`).
-- **Underscores (`GFM-M12`):** Intra-word subscripts (`$a_1 + b_2$`) are safe. Flanking subscripts (`$P_{\text{primary}}$ and $P_{\text{secondary}}$`) collide with CommonMark emphasis—use `\_` (GitHub/dual) or space-padded ` _ ` (VS Code/KaTeX).
+- **Underscores (`GFM-M12`):** Intra-word subscripts (`$a_1 + b_2$`) are always safe. Flanking subscripts (`$P_{\text{primary}}$ and $P_{\text{secondary}}$`) collide with CommonMark emphasis—prefer GFM backtick math (``$`P_{\text{primary}}`$``) or space-padded subscripts (`$P _ {\text{primary}}$`, emitted by `--target vscode`) for strict KaTeX + GitHub portability (`\_`, the default `--target dual`/`github` fix, is unescaped by GitHub per `P2` but fails in local KaTeX).
 - **Code identifiers belong in backticks (`GFM-M03`, `GFM-M14`):** Write `` `sensor_out` `` and `` `fix(fix(c)) == fix(c)` `` outside math instead of `\text{sensor_out}`.
 - **Tables (`GFM-T01`):** Never use raw `|` or HTML `&#124;` inside table math. Use `\lvert x \rvert`, `\lVert x \rVert`, or `\vert`.
 - **Currency (`GFM-M10`):** Escape literal currency signs (`\$10 to \$20`).
