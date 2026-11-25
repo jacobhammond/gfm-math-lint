@@ -116,12 +116,14 @@ src/gfm_math_lint/
 ├── cli.py              # CLI argument parser and command handlers
 ├── comment.py          # Safe GitHub PR/Issue comment delivery via stdin streaming
 ├── config.py           # pyproject.toml configuration loader and exclusion filters
-├── emulator.py         # Zero-dependency CommonMark math escape & flanking emulator
+├── emulator.py         # Zero-dependency CommonMark math escape, flanking & span-diff emulator
 ├── fixer.py            # Reverse-offset edit algebra and unified diff generator
+├── latex.py            # Zero-dependency LaTeX structural validator & optional KaTeX strict runner
 ├── linter.py           # Orchestrator running rules against tokenized documents
+├── probe.py            # Synthetic GitHub /markdown API calibrator (P1-P11)
 ├── py.typed            # PEP 561 type annotation marker
 ├── tokenizer.py        # 8-zone lexical state machine and line scanner
-├── verifier.py         # Live GitHub API oracle and KaTeX HTML preview builder
+├── verifier.py         # Local-first differential verifier, remote GitHub API oracle & preview builder
 └── rules/              # Modular rule implementations
     ├── __init__.py     # Registry of active rules
     ├── base.py         # Abstract base classes: Rule, Violation, Severity

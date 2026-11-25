@@ -128,6 +128,11 @@ class _TargetConfigurable(Protocol):
     target: str
 
 
+@runtime_checkable
+class _ExpensiveReadonlyRule(Protocol):
+    is_expensive_readonly: bool
+
+
 @dataclass
 class LintResult:
     """Result of linting a file or string."""
@@ -161,11 +166,14 @@ class Linter:
         zones: list[DocumentZone],
         suppression: SuppressionManager,
         file_path: str,
+        skip_expensive_readonly: bool = False,
     ) -> list[Violation]:
         """Run active rules and filter inline suppressions."""
         raw_violations: list[Violation] = []
         for rule in self.rules:
             if self.config.is_rule_ignored(rule.id, file_path, self.root_dir):
+                continue
+            if skip_expensive_readonly and isinstance(rule, _ExpensiveReadonlyRule) and rule.is_expensive_readonly:
                 continue
             if isinstance(rule, _TargetConfigurable):
                 rule.target = self.config.target
@@ -217,7 +225,13 @@ class Linter:
             iter_lines = current_content.splitlines(keepends=True)
             iter_zones = scan_document_zones(iter_lines)
             iter_suppression = SuppressionManager.parse_from_lines(iter_lines, iter_zones)
-            iter_violations = self._collect_violations(iter_lines, iter_zones, iter_suppression, file_path)
+            iter_violations = self._collect_violations(
+                iter_lines,
+                iter_zones,
+                iter_suppression,
+                file_path,
+                skip_expensive_readonly=True,
+            )
             iter_edits: list[LintEdit] = [
                 v.edit
                 for v in iter_violations
@@ -238,10 +252,13 @@ class Linter:
 
             warnings.warn(f"Fixes did not converge within 5 passes for {file_path}", RuntimeWarning, stacklevel=2)
 
-        post_lines = current_content.splitlines(keepends=True)
-        post_zones = scan_document_zones(post_lines)
-        post_suppression = SuppressionManager.parse_from_lines(post_lines, post_zones)
-        post_violations = self._collect_violations(post_lines, post_zones, post_suppression, file_path)
+        if current_content == content:
+            post_violations = sorted_violations
+        else:
+            post_lines = current_content.splitlines(keepends=True)
+            post_zones = scan_document_zones(post_lines)
+            post_suppression = SuppressionManager.parse_from_lines(post_lines, post_zones)
+            post_violations = self._collect_violations(post_lines, post_zones, post_suppression, file_path)
 
         # Safe-Fix Guard (REG-22): roll back if fixing introduces a net-new unfixable violation
         initial_rule_ids = {v.rule_id for v in sorted_violations}

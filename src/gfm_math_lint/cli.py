@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from importlib import metadata
@@ -17,8 +18,14 @@ from gfm_math_lint.linter import (
     format_violation_github,
     format_violation_text,
 )
+from gfm_math_lint.probe import run_probes
 from gfm_math_lint.rules.shell_rules import RuleS01
-from gfm_math_lint.verifier import build_preview_html, open_in_browser, verify_file, verify_markdown
+from gfm_math_lint.verifier import (
+    build_preview_html,
+    open_in_browser,
+    verify_file_detailed,
+    verify_markdown_detailed,
+)
 
 
 def get_version() -> str:
@@ -26,7 +33,7 @@ def get_version() -> str:
     try:
         return metadata.version("gfm-math-lint")
     except metadata.PackageNotFoundError:
-        return "0.2.0"
+        return "0.3.0"
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -119,11 +126,30 @@ def get_parser() -> argparse.ArgumentParser:
     # verify subcommand
     verify_parser = subparsers.add_parser(
         "verify",
-        help="Verify rendered GFM HTML using GitHub Markdown API oracle",
+        help="Verify GFM math and diagrams locally (pass --remote for GitHub Markdown API)",
     )
     verify_parser.add_argument("paths", nargs="*", default=["."], help="Files or directories to verify")
     verify_parser.add_argument("--config", help="Path to pyproject.toml configuration file")
     verify_parser.add_argument("--token", help="GitHub Personal Access Token for API requests")
+    verify_parser.add_argument(
+        "--remote",
+        action="store_true",
+        help="Send markdown to GitHub /markdown REST API instead of running the local emulator",
+    )
+    verify_parser.add_argument(
+        "--preview-dir",
+        help="Directory to render high-DPI PNG previews of Mermaid diagrams via mmdc",
+    )
+    verify_parser.add_argument(
+        "--no-katex",
+        action="store_true",
+        help="Disable optional local Node.js KaTeX validation",
+    )
+    verify_parser.add_argument(
+        "--strict-katex",
+        action="store_true",
+        help="Treat KaTeX strict warnings (e.g. unknownSymbol) as verification errors",
+    )
     verify_parser.add_argument("--html", help="Path to write rendered HTML preview document")
     verify_parser.add_argument("--browser", action="store_true", help="Open rendered preview in web browser")
     verify_parser.add_argument(
@@ -131,11 +157,29 @@ def get_parser() -> argparse.ArgumentParser:
         "--raw",
         action="store_true",
         dest="stdout",
-        help="Print API-rendered HTML directly to standard output",
+        help="Print rendered HTML directly to standard output",
     )
     verify_parser.add_argument(
         "--format",
         choices=["text", "github"],
+        default="text",
+        help="Output format (default: text)",
+    )
+
+    # probe subcommand
+    probe_parser = subparsers.add_parser(
+        "probe",
+        help="Calibrate local GFM emulator against synthetic GitHub /markdown probes (zero user data sent)",
+    )
+    probe_parser.add_argument("--token", help="GitHub Personal Access Token for API requests")
+    probe_parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run built-in synthetic probes against the local emulator only without network calls",
+    )
+    probe_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
         default="text",
         help="Output format (default: text)",
     )
@@ -418,9 +462,24 @@ def cmd_comment(args: argparse.Namespace) -> int:
         return 2
 
 
+def _preview_stem_for_path(file_path: Path, root_dir: Path) -> str:
+    """Build a collision-free preview filename stem from a file's path relative to `root_dir`."""
+    try:
+        rel = file_path.resolve().relative_to(root_dir.resolve())
+    except ValueError:
+        rel = file_path
+    parts = [p for p in rel.with_suffix("").parts if p not in (".", "..", "")]
+    return "__".join(parts) if parts else file_path.stem
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """Execute 'verify' subcommand."""
     is_stdout = getattr(args, "stdout", False)
+    is_remote = getattr(args, "remote", False)
+    use_katex = not getattr(args, "no_katex", False)
+    strict_katex = getattr(args, "strict_katex", False)
+    preview_dir_arg = getattr(args, "preview_dir", None)
+    preview_dir = Path(preview_dir_arg) if preview_dir_arg else None
     diag_stream = sys.stderr if is_stdout else sys.stdout
 
     if "-" in args.paths:
@@ -434,40 +493,57 @@ def cmd_verify(args: argparse.Namespace) -> int:
             sys.stderr.write(f"Error reading stdin: {e}\n")
             return 2
 
-        diag_stream.write("Auditing <stdin> against api.github.com...\n")
+        if is_remote:
+            diag_stream.write("Auditing <stdin> against api.github.com...\n")
+        else:
+            diag_stream.write("Auditing <stdin> locally (offline emulator)...\n")
 
         try:
-            rendered_html, issues = verify_markdown(
+            report = verify_markdown_detailed(
                 content,
                 file_path="<stdin>",
                 token=args.token,
                 stdout=is_stdout,
+                remote=is_remote,
+                use_katex=use_katex,
+                strict_katex=strict_katex,
+                preview_dir=preview_dir,
+                preview_stem="stdin",
             )
         except Exception as e:
             sys.stderr.write(f"Error verifying <stdin>: {e}\n")
             return 2
 
-        for issue in issues:
+        diag_stream.write(f"<stdin>: Recognized {report.received_count}/{report.intended_count} math spans\n")
+
+        error_count = 0
+        for issue in report.issues:
+            if issue.severity != "warning":
+                error_count += 1
             if args.format == "github":
                 file_esc = _escape_workflow_property("<stdin>")
                 cat_esc = _escape_workflow_property(issue.category)
                 msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
-                diag_stream.write(f"::error file={file_esc},title={cat_esc}::{msg_esc}\n")
+                level = "warning" if issue.severity == "warning" else "error"
+                diag_stream.write(f"::{level} file={file_esc},title={cat_esc}::{msg_esc}\n")
             else:
                 diag_stream.write(f"<stdin>: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
 
+        if report.mermaid_previews:
+            diag_stream.write(f"Rendered {len(report.mermaid_previews)} Mermaid preview(s) to {preview_dir}\n")
+
         if args.html:
             out_path = Path(args.html)
-            full_html = build_preview_html(rendered_html, title="GFM Math Verification")
+            full_html = build_preview_html(report.rendered_html, title="GFM Math Verification")
             out_path.write_text(full_html, encoding="utf-8")
             diag_stream.write(f"Wrote rendered HTML preview to {out_path}\n")
 
         if args.browser:
-            opened_path = open_in_browser(rendered_html, title="GFM Math Verification")
+            opened_path = open_in_browser(report.rendered_html, title="GFM Math Verification")
             diag_stream.write(f"Opened preview in browser ({opened_path})\n")
 
-        if len(issues) > 0:
-            sys.stderr.write(f"Verification failed: {len(issues)} rendering anomaly(ies) detected.\n")
+        if error_count > 0:
+            sys.stderr.write(f"Verification failed: {error_count} rendering anomaly(ies) detected.\n")
             return 1
 
         diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")
@@ -492,30 +568,49 @@ def cmd_verify(args: argparse.Namespace) -> int:
         sys.stderr.write("No markdown files found to verify.\n")
         return 0
 
-    diag_stream.write(f"Auditing {len(filtered_files)} file(s) against api.github.com...\n")
+    if is_remote:
+        diag_stream.write(f"Auditing {len(filtered_files)} file(s) against api.github.com...\n")
+    else:
+        diag_stream.write(f"Auditing {len(filtered_files)} file(s) locally (offline emulator)...\n")
 
-    total_issues = 0
+    total_errors = 0
     all_html_chunks: list[str] = []
 
     for file_path in filtered_files:
         try:
-            rendered_html, issues = verify_file(file_path, token=args.token, stdout=is_stdout)
+            report = verify_file_detailed(
+                file_path,
+                token=args.token,
+                stdout=is_stdout,
+                remote=is_remote,
+                use_katex=use_katex,
+                strict_katex=strict_katex,
+                preview_dir=preview_dir,
+                preview_stem=_preview_stem_for_path(file_path, root_dir),
+            )
         except Exception as e:
             sys.stderr.write(f"Error verifying {file_path}: {e}\n")
             return 2
 
-        all_html_chunks.append(rendered_html)
+        all_html_chunks.append(report.rendered_html)
+        diag_stream.write(f"{file_path}: Recognized {report.received_count}/{report.intended_count} math spans\n")
 
-        for issue in issues:
+        for issue in report.issues:
+            if issue.severity != "warning":
+                total_errors += 1
             if args.format == "github":
                 file_esc = _escape_workflow_property(str(file_path))
                 cat_esc = _escape_workflow_property(issue.category)
                 msg_esc = _escape_workflow_data(f"{issue.message} ({issue.snippet})")
-                diag_stream.write(f"::error file={file_esc},title={cat_esc}::{msg_esc}\n")
+                level = "warning" if issue.severity == "warning" else "error"
+                diag_stream.write(f"::{level} file={file_esc},title={cat_esc}::{msg_esc}\n")
             else:
                 diag_stream.write(f"{file_path}: [{issue.category}] {issue.message}\n  Snippet: {issue.snippet}\n")
 
-        total_issues += len(issues)
+        if report.mermaid_previews:
+            diag_stream.write(
+                f"Rendered {len(report.mermaid_previews)} Mermaid preview(s) for {file_path} to {preview_dir}\n"
+            )
 
     combined_html = "\n<hr>\n".join(all_html_chunks)
 
@@ -529,12 +624,31 @@ def cmd_verify(args: argparse.Namespace) -> int:
         opened_path = open_in_browser(combined_html, title="GFM Math Verification")
         diag_stream.write(f"Opened preview in browser ({opened_path})\n")
 
-    if total_issues > 0:
-        sys.stderr.write(f"Verification failed: {total_issues} rendering anomaly(ies) detected.\n")
+    if total_errors > 0:
+        sys.stderr.write(f"Verification failed: {total_errors} rendering anomaly(ies) detected.\n")
         return 1
 
     diag_stream.write("All files verified cleanly! 0 rendering anomalies detected.\n")
     return 0
+
+
+def cmd_probe(args: argparse.Namespace) -> int:
+    """Execute 'probe' subcommand."""
+    try:
+        report = run_probes(
+            token=getattr(args, "token", None),
+            offline=getattr(args, "offline", False),
+        )
+    except Exception as e:
+        sys.stderr.write(f"Error running probes: {e}\n")
+        return 2
+
+    if getattr(args, "format", "text") == "json":
+        sys.stdout.write(json.dumps(report.to_json_dict(), indent=2) + "\n")
+    else:
+        sys.stdout.write(report.format_text() + "\n")
+
+    return 0 if report.all_passed else 1
 
 
 def cmd_fix(args: argparse.Namespace) -> int:
@@ -563,6 +677,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_comment(args)
     elif args.command == "verify":
         return cmd_verify(args)
+    elif args.command == "probe":
+        return cmd_probe(args)
 
     return 0
 

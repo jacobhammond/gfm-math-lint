@@ -1,13 +1,19 @@
-"""GFM Mermaid diagram and fence symmetry rules (GFM-D01 through GFM-D05)."""
+"""GFM Mermaid diagram and fence symmetry rules (GFM-D01 through GFM-D06)."""
 
 from __future__ import annotations
 
+import json
+import os
 import re
-from typing import TYPE_CHECKING
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from gfm_math_lint.fixer import LintEdit
 from gfm_math_lint.rules.base import Rule, Violation
-from gfm_math_lint.tokenizer import DocumentZone, Zone, is_escaped
+from gfm_math_lint.tokenizer import DocumentZone, Zone, is_escaped, scan_document_zones
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -452,3 +458,202 @@ class RuleD05(Rule):
                 )
 
         return violations
+
+
+_BROWSER_ENV_ERROR_MARKERS: tuple[str, ...] = (
+    "could not find chrome",
+    "failed to launch the browser",
+    "no usable sandbox",
+    "error while loading shared libraries",
+    "cannot open shared object file",
+    "browser was not found",
+)
+
+
+def find_mmdc_binary() -> str | None:
+    """Return the path to `mmdc` (@mermaid-js/mermaid-cli) on PATH, or None."""
+    return shutil.which("mmdc")
+
+
+def find_headless_chrome_binary() -> str | None:
+    """Locate an existing headless Chrome/Chromium executable without downloading one."""
+    for env_var in ("BROWSER_PATH", "CHROME_PATH", "PUPPETEER_EXECUTABLE_PATH"):
+        val = os.environ.get(env_var, "").strip()
+        if val and Path(val).is_file():
+            return val
+    for candidate in ("chrome-headless-shell", "chromium", "chromium-browser", "google-chrome"):
+        found = shutil.which(candidate)
+        if found:
+            return found
+    return None
+
+
+def build_puppeteer_config(executable_path: str | None = None) -> dict[str, Any]:
+    """Build a desktop-quiet Puppeteer config using headless shell mode."""
+    cfg: dict[str, Any] = {
+        "headless": "shell",
+        "args": ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
+    }
+    exe = executable_path if executable_path is not None else find_headless_chrome_binary()
+    if exe:
+        cfg["executablePath"] = exe
+    return cfg
+
+
+def _get_mmdc_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["PUPPETEER_SKIP_DOWNLOAD"] = "1"
+    env["PUPPETEER_SKIP_CHROMIUM_DOWNLOAD"] = "1"
+    return env
+
+
+def _extract_mermaid_blocks(zones: list[DocumentZone]) -> list[tuple[int, str]]:
+    """Return `(start_line, diagram_source)` for closed Mermaid fenced code blocks."""
+    blocks: list[tuple[int, str]] = []
+    for zone in zones:
+        if zone.zone_type != Zone.FENCED_CODE or zone.info.strip().lower() != "mermaid" or not zone.is_closed:
+            continue
+        inner_lines = zone.lines[1:-1] if len(zone.lines) >= 2 else []
+        cleaned = [
+            _strip_blockquote_prefix(ln) if (zone.parent_block == "blockquote" or ln.lstrip().startswith(">")) else ln
+            for ln in inner_lines
+        ]
+        src = "".join(cleaned).strip()
+        if src:
+            blocks.append((zone.start_line, src))
+    return blocks
+
+
+def _is_browser_env_error(output: str) -> bool:
+    low = output.lower()
+    return any(marker in low for marker in _BROWSER_ENV_ERROR_MARKERS)
+
+
+class RuleD06(Rule):
+    """GFM-D06: Opportunistic Mermaid Syntax Validation via `mmdc`."""
+
+    id: str = "GFM-D06"
+    name: str = "mermaid-parse"
+    description: str = "Opportunistically validate Mermaid diagram syntax using mmdc when installed"
+    severity: str = "error"
+    is_expensive_readonly: bool = True
+
+    def check(self, lines: Sequence[str], zones: list[DocumentZone], file_path: str = "") -> list[Violation]:
+        blocks = _extract_mermaid_blocks(zones)
+        if not blocks:
+            return []
+
+        mmdc_bin = find_mmdc_binary()
+        if not mmdc_bin:
+            return []
+
+        violations: list[Violation] = []
+        cfg = build_puppeteer_config()
+        env = _get_mmdc_env()
+
+        with tempfile.TemporaryDirectory(prefix="gfm_mermaid_") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            cfg_path = tmp_path / "puppeteer-config.json"
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+            for idx, (start_line, src) in enumerate(blocks):
+                in_mmd = tmp_path / f"diagram_{idx}.mmd"
+                out_svg = tmp_path / f"diagram_{idx}.svg"
+                in_mmd.write_text(src + "\n", encoding="utf-8")
+
+                try:
+                    proc = subprocess.run(
+                        [mmdc_bin, "-i", str(in_mmd), "-o", str(out_svg), "-p", str(cfg_path)],
+                        capture_output=True,
+                        shell=False,
+                        check=False,
+                        timeout=30,
+                        env=env,
+                    )
+                except subprocess.TimeoutExpired:
+                    continue
+                except (subprocess.SubprocessError, OSError):
+                    break
+
+                if proc.returncode != 0:
+                    combined = (
+                        proc.stderr.decode("utf-8", errors="replace")
+                        + "\n"
+                        + proc.stdout.decode("utf-8", errors="replace")
+                    ).strip()
+                    if _is_browser_env_error(combined):
+                        break
+                    first_line = next((ln.strip() for ln in combined.splitlines() if ln.strip()), "Syntax error")
+                    violations.append(
+                        Violation(
+                            rule_id=self.id,
+                            message=f"Mermaid syntax error (mmdc): {first_line[:200]}",
+                            line=start_line,
+                            col=1,
+                            severity=self.severity,
+                            edit=None,
+                        )
+                    )
+
+        return violations
+
+
+def render_mermaid_previews(markdown_content: str, output_dir: Path, stem: str = "diagram") -> list[Path]:
+    """Render all Mermaid blocks in `markdown_content` to high-DPI PNGs in `output_dir`."""
+    lines = markdown_content.splitlines(keepends=True)
+    if not lines:
+        return []
+    zones = scan_document_zones(lines)
+    blocks = _extract_mermaid_blocks(zones)
+    if not blocks:
+        return []
+
+    mmdc_bin = find_mmdc_binary()
+    if not mmdc_bin:
+        raise RuntimeError("Mermaid preview rendering requires 'mmdc' (@mermaid-js/mermaid-cli) on PATH.")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    cfg = build_puppeteer_config()
+    env = _get_mmdc_env()
+    written: list[Path] = []
+
+    with tempfile.TemporaryDirectory(prefix="gfm_mermaid_preview_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        cfg_path = tmp_path / "puppeteer-config.json"
+        cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+        for idx, (_start_line, src) in enumerate(blocks, start=1):
+            in_mmd = tmp_path / f"diagram_{idx:02d}.mmd"
+            out_png = output_dir / f"{stem}_mermaid_{idx:02d}.png"
+            in_mmd.write_text(src + "\n", encoding="utf-8")
+
+            try:
+                proc = subprocess.run(
+                    [
+                        mmdc_bin,
+                        "-i",
+                        str(in_mmd),
+                        "-o",
+                        str(out_png),
+                        "-s",
+                        "2",
+                        "-b",
+                        "white",
+                        "-p",
+                        str(cfg_path),
+                    ],
+                    capture_output=True,
+                    shell=False,
+                    check=False,
+                    timeout=30,
+                    env=env,
+                )
+            except (subprocess.SubprocessError, OSError) as e:
+                raise RuntimeError(f"Failed to invoke mmdc for Mermaid preview: {e}") from e
+
+            if proc.returncode != 0:
+                err_txt = proc.stderr.decode("utf-8", errors="replace").strip()
+                raise RuntimeError(f"mmdc failed rendering Mermaid diagram #{idx}: {err_txt or 'unknown error'}")
+            written.append(out_png)
+
+    return written

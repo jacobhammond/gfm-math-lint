@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import os
 import re
@@ -12,10 +13,20 @@ import tempfile
 import urllib.error
 import urllib.request
 import webbrowser
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+
+from gfm_math_lint.emulator import (
+    MathSpan,
+    SpanDiff,
+    compare_math_spans,
+    emulate_gfm_document,
+    extract_intended_math_spans,
+)
+from gfm_math_lint.latex import run_local_katex_verification, validate_latex
+from gfm_math_lint.rules.diagram_rules import render_mermaid_previews
 
 
 @dataclass
@@ -26,6 +37,20 @@ class VerificationIssue:
     message: str
     snippet: str
     file_path: str = ""
+    severity: str = "error"
+
+
+@dataclass
+class VerificationReport:
+    """Detailed verification report for local or remote GFM verification."""
+
+    file_path: str
+    mode: str
+    rendered_html: str
+    intended_count: int
+    received_count: int
+    issues: list[VerificationIssue] = field(default_factory=list)
+    mermaid_previews: list[Path] = field(default_factory=list)
 
 
 # Indicators that text containing '$' is broken math rather than currency
@@ -36,7 +61,7 @@ _MATH_SYNTAX_RE = re.compile(
     r"\$[^\$\n]*[=<>\\+\\-][^\$\n]*\$|"  # inline math containing operators
     r"\$[0-9.]+\$|"  # inline number math like $0.759$ or $3.6$
     r"\$[^\$\s]+\$[a-zA-Z]|"  # closing delimiter glued to unit like $0.759$dB or $15\ ^\circ$C
-    r"[-/\u2013\u2014]\$[a-zA-Z0-9]|"  # hyphen/dash/slash followed by opening math delimiter
+    r"[-/\u2013\u2014]\$[a-zA-Z0-9][^\$\n]*\$|"  # hyphen/dash/slash followed by opening math delimiter
     r"\$[a-zA-Z]\$|"  # single-letter inline math ($x$, $V$)
     r"\\text\{|\\frac\{|\\sqrt\{|\\partial|\\alpha|\\beta|\\gamma|\\Delta|\\lambda|\\mu|\\pi)"  # LaTeX macro
 )
@@ -170,6 +195,8 @@ class GFMHTMLValidator(HTMLParser):
         self.math_text_chunks: list[str] = []
         self.current_math_tag: str = ""
         self.current_math_tag_text: list[str] = []
+        self._current_math_is_display: bool = False
+        self.received_math_spans: list[MathSpan] = []
 
     @property
     def in_code_block(self) -> bool:
@@ -183,6 +210,8 @@ class GFMHTMLValidator(HTMLParser):
             self.in_math_renderer = True
             self.math_renderer_depth += 1
             if self.math_renderer_depth == 1:
+                class_val_mr = attrs_dict.get("class", "") or ""
+                self._current_math_is_display = "js-display-math" in class_val_mr
                 self.math_tags_seen = set()
                 self.math_tokens = []
                 self.math_text_chunks = []
@@ -254,6 +283,7 @@ class GFMHTMLValidator(HTMLParser):
             self.math_renderer_depth = max(0, self.math_renderer_depth - 1)
             if self.math_renderer_depth == 0:
                 self.in_math_renderer = False
+                self._record_received_math_span()
                 self._check_math_renderer_pseudo_code()
 
         elif self.in_math_renderer:
@@ -334,6 +364,12 @@ class GFMHTMLValidator(HTMLParser):
             return
         for match in _MATH_SYNTAX_RE.finditer(text):
             snippet = match.group(0).strip()
+            if (
+                re.fullmatch(r"\$\d+(?:,\d{3})*(?:\.\d{1,2})?[kKmMbB]?\s*[-/\u2013\u2014]\s*\$", snippet)
+                and match.end() < len(text)
+                and text[match.end()].isdigit()
+            ):
+                continue
             start = max(0, match.start() - 20)
             end = min(len(text), match.end() + 20)
             context_snippet = text[start:end].replace("\n", " ").strip()
@@ -345,6 +381,24 @@ class GFMHTMLValidator(HTMLParser):
                     file_path=self.file_path,
                 )
             )
+
+    def _record_received_math_span(self) -> None:
+        raw_span = html.unescape("".join(self.math_text_chunks)).strip()
+        if not raw_span:
+            return
+        is_display = self._current_math_is_display
+        if raw_span.startswith("$$") and raw_span.endswith("$$") and len(raw_span) >= 4:
+            inner = raw_span[2:-2].strip()
+            delim = "$$"
+            is_display = True
+        elif raw_span.startswith("$") and raw_span.endswith("$") and len(raw_span) >= 2:
+            inner = raw_span[1:-1].strip()
+            delim = "$"
+        else:
+            inner = raw_span
+            delim = "$$" if is_display else "$"
+        if inner:
+            self.received_math_spans.append(MathSpan(content=inner, display=is_display, delimiter=delim, line=0, col=1))
 
     def _check_math_renderer_pseudo_code(self) -> None:
         raw_text = "".join(self.math_text_chunks).strip()
@@ -615,33 +669,171 @@ def build_preview_html(body_html: str, title: str = "GFM Math Preview") -> str:
 """
 
 
+def _span_diff_to_issue(diff: SpanDiff, file_path: str) -> VerificationIssue:
+    snippet = diff.intended[:80] if diff.intended else diff.message[:80]
+    if diff.category == "span-mutated" and diff.intended and diff.received:
+        snippet = f"intended={diff.intended[:40]!r} vs received={diff.received[:40]!r}"
+    return VerificationIssue(
+        category=diff.category,
+        message=diff.message,
+        snippet=snippet,
+        file_path=file_path,
+    )
+
+
+def verify_markdown_detailed(
+    content: str,
+    file_path: str = "",
+    token: str | None = None,
+    stdout: bool = False,
+    remote: bool = False,
+    use_katex: bool = True,
+    strict_katex: bool = False,
+    preview_dir: Path | None = None,
+    preview_stem: str = "diagram",
+) -> VerificationReport:
+    """Verify markdown locally (default) or via GitHub API (--remote), returning a detailed report."""
+    mode = "remote" if remote else "local"
+    if remote:
+        rendered_html = render_gfm(content, token=token)
+        intended_spans = extract_intended_math_spans(content)
+        validator = GFMHTMLValidator(file_path=file_path)
+        validator.feed(rendered_html)
+        validator.close()
+        received_spans = validator.received_math_spans
+        span_diffs = compare_math_spans(intended_spans, received_spans)
+        html_issues = validator.issues
+    else:
+        emu = emulate_gfm_document(content)
+        rendered_html = emu.rendered_html
+        intended_spans = emu.intended_spans
+        received_spans = emu.received_spans
+        span_diffs = emu.diffs
+        validator = GFMHTMLValidator(file_path=file_path)
+        validator.feed(rendered_html)
+        validator.close()
+        html_issues = validator.issues
+
+    if stdout:
+        sys.stdout.write(rendered_html)
+        if not rendered_html.endswith("\n"):
+            sys.stdout.write("\n")
+
+    issues: list[VerificationIssue] = [_span_diff_to_issue(d, file_path) for d in span_diffs]
+    issues.extend(html_issues)
+
+    for span in received_spans:
+        for latex_issue in validate_latex(span.content, display=span.display):
+            issues.append(
+                VerificationIssue(
+                    category=latex_issue.category,
+                    message=latex_issue.message,
+                    snippet=span.content[:80],
+                    file_path=file_path,
+                )
+            )
+
+    if use_katex and received_spans:
+        katex_blocks = [(s.content, s.display) for s in received_spans]
+        for diag in run_local_katex_verification(katex_blocks, strict_warnings=True):
+            if diag.error_message:
+                issues.append(
+                    VerificationIssue(
+                        category="katex-error",
+                        message=f"KaTeX ParseError: {diag.error_message}",
+                        snippet=diag.math_content[:80],
+                        file_path=file_path,
+                        severity="error",
+                    )
+                )
+            for warn in diag.warnings:
+                issues.append(
+                    VerificationIssue(
+                        category="katex-warning",
+                        message=f"KaTeX strict warning: {warn}",
+                        snippet=diag.math_content[:80],
+                        file_path=file_path,
+                        severity="error" if strict_katex else "warning",
+                    )
+                )
+
+    previews: list[Path] = []
+    if preview_dir is not None:
+        previews = render_mermaid_previews(content, preview_dir, stem=preview_stem)
+
+    return VerificationReport(
+        file_path=file_path,
+        mode=mode,
+        rendered_html=rendered_html,
+        intended_count=len(intended_spans),
+        received_count=len(received_spans),
+        issues=issues,
+        mermaid_previews=previews,
+    )
+
+
 def verify_markdown(
     content: str,
     file_path: str = "",
     token: str | None = None,
     stdout: bool = False,
+    remote: bool = False,
+    use_katex: bool = True,
 ) -> tuple[str, list[VerificationIssue]]:
-    """Render markdown content via GitHub API and verify the returned HTML."""
-    rendered_html = render_gfm(content, token=token)
-    if stdout:
-        sys.stdout.write(rendered_html)
-        if not rendered_html.endswith("\n"):
-            sys.stdout.write("\n")
-    validator = GFMHTMLValidator(file_path=file_path)
-    validator.feed(rendered_html)
-    validator.close()
-    return rendered_html, validator.issues
+    """Verify markdown content locally (default) or via GitHub API (--remote)."""
+    report = verify_markdown_detailed(
+        content,
+        file_path=file_path,
+        token=token,
+        stdout=stdout,
+        remote=remote,
+        use_katex=use_katex,
+    )
+    return report.rendered_html, report.issues
+
+
+def verify_file_detailed(
+    file_path: Path,
+    token: str | None = None,
+    stdout: bool = False,
+    remote: bool = False,
+    use_katex: bool = True,
+    strict_katex: bool = False,
+    preview_dir: Path | None = None,
+    preview_stem: str | None = None,
+) -> VerificationReport:
+    """Read a markdown file and verify it locally (default) or via GitHub API (--remote)."""
+    with file_path.open("r", encoding="utf-8", newline="") as f:
+        content = f.read()
+    return verify_markdown_detailed(
+        content,
+        file_path=str(file_path),
+        token=token,
+        stdout=stdout,
+        remote=remote,
+        use_katex=use_katex,
+        strict_katex=strict_katex,
+        preview_dir=preview_dir,
+        preview_stem=preview_stem if preview_stem is not None else file_path.stem,
+    )
 
 
 def verify_file(
     file_path: Path,
     token: str | None = None,
     stdout: bool = False,
+    remote: bool = False,
+    use_katex: bool = True,
 ) -> tuple[str, list[VerificationIssue]]:
-    """Read a markdown file, render via GitHub API, and verify the returned HTML."""
-    with file_path.open("r", encoding="utf-8", newline="") as f:
-        content = f.read()
-    return verify_markdown(content, file_path=str(file_path), token=token, stdout=stdout)
+    """Read a markdown file and verify it locally (default) or via GitHub API (--remote)."""
+    report = verify_file_detailed(
+        file_path,
+        token=token,
+        stdout=stdout,
+        remote=remote,
+        use_katex=use_katex,
+    )
+    return report.rendered_html, report.issues
 
 
 def open_in_browser(html_content: str, title: str = "GFM Math Preview") -> Path:

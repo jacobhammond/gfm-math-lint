@@ -19,7 +19,8 @@ Zero-dependency, high-performance GitHub Flavored Markdown (GFM) linter and auto
 - **8-Zone Lexical State Machine**: High-fidelity tokenizer classifying document lines into `FRONTMATTER`, `FENCED_CODE`, `INLINE_CODE`, `DISPLAY_MATH`, `INLINE_MATH`, `TABLE`, `COMMENT`, and `PROSE` to eliminate false positives.
 - **Reverse-Offset Edit Algebra**: Deterministic bottom-up, right-to-left fix application guaranteeing strict idempotency: `fix(fix(c)) == fix(c)`.
 - **Unified Diff & In-Place Fixing**: Inspect exact changes in advance with `--diff` or auto-fix in-place with `fix` / `--fix`.
-- **GitHub Rendering Oracle (`verify`)**: Directly audits documents against GitHub's live REST API (`POST /markdown` or `gh api /markdown`) to detect unrendered math in prose, HTML tag collisions, broken table grids, split delimiters across inline tags, and MathML pseudo-code stacking.
+- **Privacy-First Local `verify` & GitHub Rendering Oracle**: Runs offline by default using the zero-dependency CommonMark emulator, pure-Python LaTeX validator, and optional local strict KaTeX runner—never sending user documents over the network unless `--remote` is explicitly passed. Reports `Recognized X/Y math spans`, per-span diffs, HTML tag pollution, and table mismatches.
+- **Synthetic `probe` Calibration**: Validates the local emulator against GitHub's live `/markdown` API using only built-in synthetic snippets (`P1`–`P11`)—zero user data ever leaves the machine.
 - **KaTeX Browser Preview with Zero Red Boxes**: Generates standalone HTML (`--html`) or opens a live browser preview (`--browser`) with automated entity normalization (e.g., restoring double-escaped `&amp;gt;` to `>`) and duplicate MathML clipboard suppression (`output: "html"`).
 - **Safe GitHub Commenting**: Post markdown-rendered comments to PRs and issues via `gh` CLI with stdin streaming (`--body-file -`), preventing shell expansion corruption of LaTeX equations.
 - **Pre-commit Native**: Exit code contract (`0` clean, `1` violations/fixes, `2` error) designed specifically for CI/CD and git hook workflows.
@@ -35,7 +36,7 @@ Comprehensive technical guides, API references, and architectural records are ma
 | 🗺️ **[Development Roadmap & Retrospective](ROADMAP.md)** | Multi-phase development roadmap, Dual-Engine compatibility matrix, and Conformance Crucible gating harness. |
 | 🏛️ **[Architecture & Engine Design](docs/architecture.md)** | 8-zone lexical state machine, multi-stage compilation pipeline, reverse-offset edit algebra, and verification mechanics. |
 | 🐍 **[Python API Reference & Recipes](docs/api.md)** | Programmatic library reference (`Linter`, `LintResult`, `LintConfig`, `Verifier`) with recipes for pytest, CI, and Sphinx/MkDocs. |
-| 📖 **[Complete Rule Catalog & Authoring Guide](docs/rules.md)** | In-depth specifications for all 27 rules, CommonMark/KaTeX failure mode mechanics, and custom rule development tutorial. |
+| 📖 **[Complete Rule Catalog & Authoring Guide](docs/rules.md)** | In-depth specifications for all 28 rules, CommonMark/KaTeX failure mode mechanics, and custom rule development tutorial. |
 | 📋 **[Architectural Decision Records (ADRs)](docs/adr/README.md)** | Technical justifications for zero-dependency stdlib, reverse-offset edit algebra, state-machine tokenization, and live GitHub API verification. |
 
 ---
@@ -106,19 +107,29 @@ gfm-math-lint comment --create-issue --title "Math Bug Report" --file report.md 
 cat spec.md | gfm-math-lint post --create-pr --title "Algorithm Specs" --base main --head feat
 ```
 
-### 4. Semantic Verification & KaTeX Browser Preview
+### 4. Semantic Verification, Synthetic Probes & Diagram Previews
 
-Audit documents directly against GitHub's live REST API rendering oracle or generate a standalone preview:
+Audit documents locally by default (100% offline), opt into GitHub's live REST API with `--remote`, render Mermaid PNG previews, or calibrate against GitHub using synthetic probes:
 
 ```bash
-# Verify markdown files against GitHub API oracle
+# Verify markdown files locally (offline emulator + LaTeX validator + optional KaTeX)
 gfm-math-lint verify docs/ README.md
+
+# Opt into live GitHub /markdown API verification
+gfm-math-lint verify --remote docs/ README.md
 
 # Verify piped markdown stream from stdin
 cat draft.md | gfm-math-lint verify -
 git show HEAD:README.md | gfm-math-lint verify -
 
-# Stream API-rendered HTML directly to stdout (diagnostics routed to stderr)
+# Render high-DPI PNG previews of Mermaid diagrams via mmdc
+gfm-math-lint verify --preview-dir build/previews docs/specification.md
+
+# Calibrate local emulator against synthetic GitHub /markdown probes (zero user data sent)
+gfm-math-lint probe
+gfm-math-lint probe --offline
+
+# Stream rendered HTML directly to stdout (diagnostics routed to stderr)
 gfm-math-lint verify --stdout docs/specification.md
 gfm-math-lint verify - --raw < draft.md > rendered.html
 
@@ -131,14 +142,15 @@ gfm-math-lint verify --browser docs/specification.md
 
 #### Feature Requirements & Authentication Matrix
 
-`gfm-math-lint` follows an **offline-first** design: local linting and fixing never require network access or a GitHub account.
+`gfm-math-lint` follows an **offline-first** design: core linting, fixing, and default `verify` never require network access or a GitHub account.
 
 | Feature / Command | Requires Internet? | Requires GitHub Account? | Rate Limit | Primary Transport |
 | :--- | :---: | :---: | :--- | :--- |
 | **`check` / `fix`** | **No** (100% Offline) | **No** | Unlimited (Local execution) | Built-in regex & 8-zone lexical state machine |
 | **`check-shell`** | **No** (100% Offline) | **No** | Unlimited (Local execution) | Built-in shell script AST/regex scanner |
-| **`verify` (Unauthenticated)** | **Yes** | **No** | **60 requests / hour** (per public IP) | Direct HTTPS `POST` to `/markdown` via stdlib `urllib.request` |
-| **`verify` (Authenticated)** | **Yes** | **Optional** | **5,000 requests / hour** (15,000/hr for GHEC) | `gh api /markdown` (if `gh` installed) or Bearer token |
+| **`verify` (Default)** | **No** (100% Offline) | **No** | Unlimited (Local execution) | Local GFM emulator, `latex.py`, optional local KaTeX |
+| **`verify --remote`** | **Yes** | **Optional** | **60–5,000 req / hr** | `gh api /markdown` or HTTPS `POST` to `/markdown` |
+| **`probe`** | **Yes** (`--offline` skips) | **Optional** | **1 req / run** (synthetic only) | Single batched `/markdown` request (`P1`–`P11`) |
 | **`comment`** | **Yes** | **Yes** (Write access) | Standard GitHub API limits | GitHub CLI (`gh`) with stdin streaming |
 
 > For full architectural details on token resolution order and API rate limit mechanics, see [Architecture & Engine Design: Section 2.D](docs/architecture.md#d-the-verifier--github-api-oracle-gfm_math_lintverifier).
@@ -173,7 +185,7 @@ Add `gfm-math-lint` to your `.pre-commit-config.yaml` to enforce valid equations
 ```yaml
 repos:
   - repo: https://github.com/jacobhammond/gfm-math-lint
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       # Validates math, table, code fence, and boundary issues
       - id: gfm-math-lint
@@ -260,6 +272,7 @@ The following rules are enforced by `gfm-math-lint`. For detailed failure mode e
 | `GFM-D03` | Diagrams | `mermaid-newline-linebreak` | Error | Yes | [Details](docs/rules.md#gfm-d03-mermaid-newline-linebreak) |
 | `GFM-D04` | Diagrams | `mermaid-label-special-chars` | Error | Yes | [Details](docs/rules.md#gfm-d04-mermaid-label-special-chars) |
 | `GFM-D05` | Diagrams | `math-in-mermaid` | Warning | No | [Details](docs/rules.md#gfm-d05-math-in-mermaid) |
+| `GFM-D06` | Diagrams | `mermaid-parse` | Error | No | [Details](docs/rules.md#gfm-d06-mermaid-parse) |
 | `GFM-S01` | Shell | `unsafe-shell-expansion` | Error | No | [Details](docs/rules.md#gfm-s01-unsafe-shell-expansion) |
 
 ---

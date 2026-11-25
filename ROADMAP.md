@@ -707,7 +707,7 @@ flowchart LR
 
 ---
 
-### Phase 2: Codebase Trimming, Block/Emulator Foundation, Safe-Subset Rules & `fix` Contract (v0.2.0)
+### Phase 2: Codebase Trimming, Block/Emulator Foundation, Safe-Subset Rules & `fix` Contract (v0.2.0) — **[COMPLETED]**
 **Goal:** Trim out-of-scope rules (`GFM-I01`), fix the `cli.py` / `linter.py` post-fix contract, lay the shared block-context (`ADR 0005`) and CommonMark escape/flanking emulator (`emulator.py`) foundation first, and build the safe-subset math and Mermaid rules directly on top.
 
 #### PR 2.1: Scope Trimming (Remove `GFM-I01` AVIF Rule), `fix` Contract Overhaul & Target Profiles
@@ -778,7 +778,7 @@ flowchart LR
 
 ---
 
-### Phase 3: Privacy-First Local `verify`, Synthetic `probe`, Strict KaTeX & Mermaid Preview (v0.3.0)
+### Phase 3: Privacy-First Local `verify`, Synthetic `probe`, Strict KaTeX & Mermaid Preview (v0.3.0) — **[COMPLETED]**
 **Goal:** Deliver 100% offline, privacy-preserving verification by default, calibrate against GitHub via `gfm-math-lint probe`, surface strict KaTeX warnings, and provide desktop-quiet Mermaid parsing/previews.
 
 #### PR 3.1: Zero-Dependency LaTeX Validator & Local-Default Differential `verify` (`verify` vs. `verify --remote`)

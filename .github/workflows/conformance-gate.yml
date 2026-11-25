@@ -7,6 +7,9 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -47,6 +50,9 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --locked
 
+      - name: Run Offline Synthetic Probe Self-Check
+        run: uv run --locked gfm-math-lint probe --offline
+
       - name: Execute Conformance Crucible 4-Stage Benchmark Pipeline
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,3 +86,27 @@ jobs:
           name: conformance-scorecard
           path: build/reports/
           retention-days: 14
+
+  github-probe:
+    name: Synthetic GitHub /markdown Probe
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Run Live Synthetic GitHub Probe Calibration
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: uv run --locked gfm-math-lint probe

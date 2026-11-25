@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from gfm_math_lint.rules.base import Rule, Violation
 from gfm_math_lint.rules.code_rules import RuleC01, RuleC02
-from gfm_math_lint.rules.diagram_rules import RuleD01, RuleD02, RuleD03, RuleD04, RuleD05
+from gfm_math_lint.rules.diagram_rules import RuleD01, RuleD02, RuleD03, RuleD04, RuleD05, RuleD06
 from gfm_math_lint.rules.math_rules import (
     RuleM01,
     RuleM02,
@@ -64,6 +64,7 @@ ALL_DIAGRAM_RULES: list[Rule] = [
     RuleD03(),
     RuleD04(),
     RuleD05(),
+    RuleD06(),
 ]
 
 ALL_MARKDOWN_RULES: list[Rule] = [
@@ -101,6 +102,7 @@ __all__ = [
     "RuleD03",
     "RuleD04",
     "RuleD05",
+    "RuleD06",
     "RuleM01",
     "RuleM02",
     "RuleM03",
