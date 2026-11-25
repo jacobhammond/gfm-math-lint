@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-25
+
+### Added
+- **Composite GitHub Action (`actions/gfm-math-lint-action`)**: Added a reusable composite GitHub Action supporting `check`, `fix`, `verify`, `probe`, and `check-shell` modes, `--format github`/`json` output, JSON report paths, and safe stdin-streamed PR summary comments (`post-comment`).
+- **Expanded Pre-Commit Hooks (`.pre-commit-hooks.yaml`)**: Added `gfm-math-fix` (`gfm-math-lint fix`) and `gfm-math-verify` (`gfm-math-lint verify`) alongside `gfm-math-lint` and `gfm-shell-lint`.
+- **One-Page Safe Subset Cheat Sheet (`docs/safe-subset-cheatsheet.md`)**: Published the dual-engine authoring cheat sheet (letter-named macros, EOL-only `\\`, column-0 `$$`, Mermaid `<br>` & `flowchart LR` + `-.->`, `GFM-T01` `\lvert...\rvert`), live-confirmed `P1`–`P11` GitHub `/markdown` Probe Ground-Truth Table, and explicit Privacy Model.
+- **Diagnostic Documentation Links (`rules/base.py`, `linter.py`, `cli.py`)**: Added `SAFE_SUBSET_DOCS_URL` and `get_safe_subset_url()`, `"docs_url"` in JSON violation payloads, CLI `--help` epilog, and terminal diagnostic hints.
+- **Archived Field Retrospectives & ADR 0006**: Extracted Session 1 & Session 2 forensic retrospectives to `docs/retrospectives/`, added [ADR 0006](docs/adr/0006-privacy-first-differential-verification.md), and refreshed `docs/README.md` and `docs/rules.md`.
+
+### Changed
+- **Production/Stable Release**: Promoted package classifier from `4 - Beta` to `5 - Production/Stable` (`1.0.0`) with all Phases 0–5 completed in `ROADMAP.md`.
+
 ## [0.4.0] - 2026-11-25
 
 ### Added
@@ -75,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
+[1.0.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jacobhammond/gfm-math-lint/compare/v0.1.2...v0.2.0

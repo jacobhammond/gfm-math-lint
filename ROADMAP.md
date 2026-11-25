@@ -2,10 +2,10 @@
 
 > **Document Type:** Developer Roadmap, Architectural Plan & Field Retrospectives  
 > **Source Sessions:**  
-> - **Session 1 (`session-harvest-trace-01`):** *Hardware Telemetry Specification* (Dual-Engine KaTeX vs. GitHub Web Forensics)  
-> - **Session 2 (`dual-doc-conversion-2026-11`):** *Converting Two Equation-Heavy Documents to GitHub Math & Mermaid* ([`RETROSPECTIVE_2026-11_dual_doc_session.md`](RETROSPECTIVE_2026-11_dual_doc_session.md))  
+> - **Session 1 (`session-harvest-trace-01`):** *Hardware Telemetry Specification* ([`docs/retrospectives/session-01-hardware-telemetry.md`](docs/retrospectives/session-01-hardware-telemetry.md))  
+> - **Session 2 (`dual-doc-conversion-2026-11`):** *Converting Two Equation-Heavy Documents to GitHub Math & Mermaid* ([`docs/retrospectives/session-02-dual-doc-conversion.md`](docs/retrospectives/session-02-dual-doc-conversion.md))  
 > **Target Codebase:** `gfm-math-lint`  
-> **Status:** Accepted Architectural Plan / Active Implementation Roadmap (Reconciled Post-`v0.1.2`)  
+> **Status:** Completed (`v1.0.0` — Track 0 & Phases 1–5 Shipped)  
 
 ---
 
@@ -15,52 +15,11 @@
 
 ### 1.1 Session 1 Harvest (`session-harvest-trace-01`): Hardware Telemetry Specification
 
-During an automated documentation task synthesizing a technical calibration specification (`telemetry_metric_report.md`) containing physical telemetry formulas, sensor ratios, Mermaid flowcharts, and LaTeX expressions, the agent encountered compounding rendering and verification failures that required **625 total steps, 189 `run_command` invocations, 27 ad-hoc Python scripts, and 33 custom scratch diagnostic scripts** before math and diagrams rendered cleanly across both GitHub Web and local editor previewers.
-
-#### Tool Execution & Roadblock Metrics (Session 1)
-
-| Tool Call | Invocations | Role in Forensic Trace |
-| :--- | :--- | :--- |
-| `run_command` | 189 | Shell iterations, test runs, and CLI bisections |
-| `view_file` | 48 | Inspecting logs and source files |
-| `write_to_file` | 30 | Authoring ad-hoc scripts and patches |
-| `manage_task` | 8 | Background test execution |
-| `replace_file_content` | 5 | Targeted file edits |
-
-#### Forensic Sequence of Breakdown (Session 1)
-
-<!-- gfm-math-lint-disable GFM-D03, GFM-D05 -->
-```mermaid
-flowchart TD
-    S1["Agent writes report with math & diagrams:<br/>\\log_2(A), \\text{sensor_out}, list math, Mermaid \\n"] --> S2["Run: gfm-math-lint check<br/>Flags Rule GFM-M12 & GFM-M01"]
-    S2 --> S3["Run: gfm-math-lint fix<br/>Exits 1, prints 50 error lines,<br/>auto-replaces '_' with '\\_'"]
-    S3 --> S4["Agent views report in KaTeX:<br/>ParseError: Expected 'EOF', got '_'"]
-    S4 --> S5["Agent authors scratch/test_katex.js<br/>and pos_scanner.js to isolate crashes"]
-    S5 --> S6["Agent writes clean_math.js to revert '\\_'<br/>and remove '\\text{foo\\_bar}'"]
-    S6 --> S7["Run: gfm-math-lint verify<br/>Reports '0 rendering anomalies' (False Positive)"]
-    S7 --> S8["User views on GitHub Web:<br/>Raw '$$' visible, '<em>' injected inside LaTeX,<br/>Mermaid displays literal '\\n' text"]
-    S8 --> S9["Agent writes test_gh_list_math.py & bisect_diff.py<br/>Spends 60 steps manual bisection via gh api"]
-    S9 --> S10["Agent manually unindents '$$' to column 0,<br/>separates code identifiers, and repairs diagrams"]
-```
-<!-- gfm-math-lint-enable GFM-D03, GFM-D05 -->
+During an automated documentation task (`telemetry_metric_report.md`), compounding dual-engine rendering failures required **625 total steps, 189 `run_command` invocations, 27 ad-hoc Python scripts, and 33 custom scratch diagnostic scripts** before equations and Mermaid diagrams rendered cleanly on both GitHub Web and local KaTeX previewers. The full tool telemetry and forensic flowchart are archived in [Session 1 Retrospective](docs/retrospectives/session-01-hardware-telemetry.md).
 
 ### 1.2 Session 2 Harvest (`dual-doc-conversion-2026-11`): Dual Equation-Heavy Document Conversion
 
-In a second field session ([`RETROSPECTIVE_2026-11_dual_doc_session.md`](RETROSPECTIVE_2026-11_dual_doc_session.md)), an agent converted two large engineering documents from plain-text code blocks and ASCII box diagrams to GitHub math (`$...$`, `$$...$$`) and Mermaid using `gfm-math-lint v0.1.2`:
-- **Document A (Committed Model Reference):** ~800 lines $\to$ **196 math spans**, 2 Mermaid diagrams.
-- **Document B (Private Design Report, Local Only):** ~1,150 lines $\to$ **470 math spans**, 2 Mermaid diagrams.
-
-#### Verification Loop Progression (Document A)
-
-| Step | Local Linter + KaTeX Result | GitHub `/markdown` Span Comparison | Defect Exposed by Span Comparison |
-| :--- | :--- | :--- | :--- |
-| **0. Original Document** | `gfm-math-lint check`: **0 errors (False Green)** | — | All equations & ASCII box diagrams sat inside unlabelled code fences; invisible to linter (**Finding F1**). |
-| **1. First Conversion** | `fix` applied (~60 `M12` hits); KaTeX strict: 0 errors; `mmdc`: OK | **192 of 196** spans recognized | Mid-line `\\` in a one-line `bmatrix` collapsed to `\` (**Finding F2**); two `$$` blocks inside list items rendered as raw text (**Finding F3**). |
-| **2. Fixed F2, F3** | All local checks green | **194 of 196** spans recognized | A `$$` block whose second line began with `+ ` was broken into a Markdown `<ul><li>` bulleted list (**Finding F4**). |
-| **3. Fixed F4** | All local checks green | **195 of 196** spans recognized | `base-$e$`: opening `$` glued to a hyphen was rejected as a math delimiter (**Finding F5**). |
-| **4. Fixed F5** | All local checks green | **196 of 196 spans recognized**, text identical, 0 HTML tags inside math | Clean convergence across all 196 spans. |
-
-Roughly **40 tool calls** were spent building validation infrastructure that `gfm-math-lint` itself should provide out of the box: a synthetic GitHub `/markdown` behavior probe, an intended-vs-received math span comparator with a CommonMark escape model, a strict KaTeX warning runner, and a focus-quiet Mermaid CLI harness. Furthermore, Document B could not be sent to `api.github.com/markdown` because it was private—proving that `verify` **must default to an accurate local emulator** rather than transmitting user documents over the network by default.
+In a second field session ([Session 2 Retrospective](docs/retrospectives/session-02-dual-doc-conversion.md)), converting two equation-heavy engineering documents (~800 lines / **196 math spans** and ~1,150 lines / **470 math spans**) exposed silent CommonMark pre-processing traps (`F1`–`F5`) and proved that `verify` must default to an accurate **local emulator** rather than transmitting private documents over the network by default.
 
 ### 1.3 Consolidated Systemic Deficiencies & Architectural Retrospective
 
@@ -75,7 +34,7 @@ Across both sessions and a full codebase audit, eleven systemic findings were id
 8. **Diagram Node Formatting & Parse Hazards (`F10`, Session 1):** Mermaid diagrams suffer from literal `\n` linebreaks (`GFM-D03`), unquoted special characters `()[]{}` or `|` in edge labels (`GFM-D04`), unsupported `$` math inside labels (`GFM-D05`), and unvalidated syntax/layout defects (`GFM-D06`).
 9. **Verifier Span-Diff Blindness & Default Network Transmission:** [`verifier.py`](src/gfm_math_lint/verifier.py) only scans rendered HTML for regex anomalies (missing silent math mutations like collapsed matrix rows `a \\ b` $\to$ `a \ b` or dropped spans) and sends documents to `api.github.com/markdown` by default instead of running a privacy-first local differential emulator.
 10. **CLI `fix` Contract Breakdown (`F11`, Session 1):** [`cli.py`](src/gfm_math_lint/cli.py#L238-L259) exits with code `1` and prints pre-fix violations even when `fix` resolves 100% of errors, and lacks a guard preventing auto-fixes from introducing net-new violations in other rules.
-11. **Out-of-Scope Asset Rules & Feature Creep (`GFM-I01` Removal):** [`RuleI01`](src/gfm_math_lint/rules/image_rules.py) (`image-avif-format`) flags standard `.png`, `.jpg`, and `.webp` images and demands `.avif`. GFM does not enforce `.avif`, and technical Markdown reports routinely use `.png`/`.svg` figures. Keeping `GFM-I01` creates noise on valid repositories and dilutes the tool's core mission.
+11. **Out-of-Scope Asset Rules & Feature Creep (`GFM-I01` Removal):** `RuleI01` (`src/gfm_math_lint/rules/image_rules.py`, `image-avif-format`) flags standard `.png`, `.jpg`, and `.webp` images and demands `.avif`. GFM does not enforce `.avif`, and technical Markdown reports routinely use `.png`/`.svg` figures. Keeping `GFM-I01` creates noise on valid repositories and dilutes the tool's core mission.
 
 ---
 
@@ -89,7 +48,7 @@ Markdown math documents must satisfy two fundamentally distinct parsing architec
 
 #### Empirical GitHub `/markdown` API Probe Table (Verified Ground Truth)
 
-A synthetic probe corpus (see [`RETROSPECTIVE_2026-11_dual_doc_session.md` Appendix A](RETROSPECTIVE_2026-11_dual_doc_session.md#appendix-a-probe-snippet-and-raw-github-output)) was rendered through `gh api -X POST /markdown -f mode=gfm` to record the exact payload inside each `<math-renderer>` element:
+A synthetic probe corpus (`P1`–`P11`, built into `gfm-math-lint probe` and documented in [Safe Subset Cheat Sheet](docs/safe-subset-cheatsheet.md#github-probe-ground-truth)) was rendered through `gh api -X POST /markdown -f mode=gfm` to record the exact payload inside each `<math-renderer>` element:
 
 | Probe ID | Markdown Source | Context | Received inside `<math-renderer>` | Empirical Verdict & Rule Mapping |
 | :--- | :--- | :--- | :--- | :--- |
@@ -124,7 +83,7 @@ A synthetic probe corpus (see [`RETROSPECTIVE_2026-11_dual_doc_session.md` Appen
 ### Finding 2: Rule-Specific Flaws, Consolidations & Scope Trimming
 
 #### A. Codebase Trimming: Remove Out-of-Scope `GFM-I01` (`image-avif-format`) & Freeze `comment.py`
-* **Why Remove `GFM-I01`:** [`src/gfm_math_lint/rules/image_rules.py`](src/gfm_math_lint/rules/image_rules.py) flags `.png`, `.jpg`, `.jpeg`, and `.webp` image links and demands `.avif`. Image compression formats have nothing to do with GFM math, tables, code fences, or Mermaid syntax, and GitHub Flavored Markdown does not mandate `.avif`. Removing `image_rules.py` and `tests/test_image_rules.py` keeps `gfm-math-lint` strictly focused on Markdown rendering correctness and eliminates false-positive noise on repositories containing standard `.png` plots.
+* **Why Remove `GFM-I01`:** `src/gfm_math_lint/rules/image_rules.py` flags `.png`, `.jpg`, `.jpeg`, and `.webp` image links and demands `.avif`. Image compression formats have nothing to do with GFM math, tables, code fences, or Mermaid syntax, and GitHub Flavored Markdown does not mandate `.avif`. Removing `image_rules.py` and `tests/test_image_rules.py` keeps `gfm-math-lint` strictly focused on Markdown rendering correctness and eliminates false-positive noise on repositories containing standard `.png` plots.
 * **Why Freeze `comment.py`:** `gfm-math-lint comment` (`src/gfm_math_lint/comment.py`) was introduced in `v0.1.2` as a safe stdin wrapper for `gh`. Rather than expanding `gfm-math-lint` into a general-purpose GitHub issue/PR client, `comment.py` is feature-frozen so engineering effort stays focused on the core linting, auto-fixing, and differential verification engine (`check`, `fix`, `verify`, `probe`).
 
 #### B. Rule [`GFM-M12`](src/gfm_math_lint/rules/math_rules.py#L926-L991) (`inline-math-underscore-collision`): CommonMark Flanking Precision & Universal Fixes
@@ -712,7 +671,7 @@ flowchart LR
 
 #### PR 2.1: Scope Trimming (Remove `GFM-I01` AVIF Rule), `fix` Contract Overhaul & Target Profiles
 * **Files:**
-  - **Remove:** [`src/gfm_math_lint/rules/image_rules.py`](src/gfm_math_lint/rules/image_rules.py), [`tests/test_image_rules.py`](tests/test_image_rules.py)
+  - **Remove:** `src/gfm_math_lint/rules/image_rules.py`, `tests/test_image_rules.py`
   - **Update:** [`src/gfm_math_lint/rules/__init__.py`](src/gfm_math_lint/rules/__init__.py), [`docs/rules.md`](docs/rules.md), [`src/gfm_math_lint/linter.py`](src/gfm_math_lint/linter.py), [`src/gfm_math_lint/cli.py`](src/gfm_math_lint/cli.py), [`src/gfm_math_lint/config.py`](src/gfm_math_lint/config.py)
 * **Design:**
   - **Remove `GFM-I01` (`image-avif-format`):** Delete `image_rules.py` and `test_image_rules.py`, and remove `ALL_IMAGE_RULES` / `RuleI01` from `rules/__init__.py` and `docs/rules.md` as image compression formats are out of scope for GFM math and diagram linting. Freeze `comment.py` scope.
@@ -821,20 +780,20 @@ flowchart LR
 
 ---
 
-### Phase 5: Safe-Subset Documentation, CI/CD & Ecosystem Integration (v1.0.0)
+### Phase 5: Safe-Subset Documentation, CI/CD & Ecosystem Integration (v1.0.0) — **[COMPLETED]**
 **Goal:** Package `gfm-math-lint` as an enterprise-grade standalone tool, pre-commit standard, and author reference.
 
 #### PR 5.1: GitHub Action & Pre-Commit Hook Distribution
-* Add `.pre-commit-hooks.yaml` to repository root.
-* Scaffold `actions/gfm-math-lint-action` supporting automated linting, `probe` checks, and PR comments via GitHub Actions.
+* Enhanced `.pre-commit-hooks.yaml` at repository root (`gfm-math-lint`, `gfm-math-fix`, `gfm-math-verify`, `gfm-shell-lint`).
+* Scaffolded `actions/gfm-math-lint-action` supporting automated linting (`check` / `fix`), offline `verify`, `probe` calibration, `check-shell`, JSON report output, and safe PR comments via GitHub Actions.
 
 #### PR 5.2: One-Page "Safe Subset" Cheat Sheet, Ground-Truth Probe Docs & ADR Consolidation
-* **Files:** [`docs/rules.md`](docs/rules.md), `docs/safe-subset-cheatsheet.md`, `docs/retrospectives/`
+* **Files:** [`docs/rules.md`](docs/rules.md), [`docs/safe-subset-cheatsheet.md`](docs/safe-subset-cheatsheet.md), [`docs/retrospectives/`](docs/retrospectives/README.md), [`docs/adr/0006-privacy-first-differential-verification.md`](docs/adr/0006-privacy-first-differential-verification.md)
 * **Features:**
-  - Publish a one-page **"Safe Subset" Cheat Sheet** generated from the rule catalog (letter-named macros table, EOL-only `\\`, column-0 `$$`, quoted Mermaid labels with `<br/>`, `flowchart LR` + `-.->` layout guidance) and link it from rule diagnostic messages.
-  - Document the **GitHub `/markdown` Probe Table (`P1`–`P11+`)** with the timestamp last confirmed by `gfm-math-lint probe`.
-  - Document the **Privacy Model**: explicitly state what `verify --remote` and `probe` transmit over the network, and guarantee that `check`, `fix`, and default `verify` never transmit user files.
-  - Archive full session retrospectives under `docs/retrospectives/` to keep `ROADMAP.md` focused as the living engineering plan.
+  - Published the one-page **"Safe Subset" Cheat Sheet** (`docs/safe-subset-cheatsheet.md`) and linked it from `violation_to_dict()` (`docs_url`), CLI `--help` epilog / diagnostic hints, and rule docs.
+  - Documented the **GitHub `/markdown` Probe Table (`P1`–`P11`)** with live confirmation timestamp (`2026-11-25`) and `gfm-math-lint probe` instructions.
+  - Documented the **Privacy Model** guaranteeing offline-first defaults for `check`, `fix`, `check-shell`, and `verify`.
+  - Archived full session retrospectives under `docs/retrospectives/` and consolidated ADRs (`0001`–`0006`).
 
 ---
 
@@ -844,11 +803,11 @@ A critical part of maintaining release velocity is reconciling existing reposito
 
 | Issue ID | Issue Title | Overlap / Contention with Roadmap | Recommended Course of Action | Status & Release |
 | :--- | :--- | :--- | :--- | :--- |
-| **#6** | `Propose 'GFM-M14' rule to detect and convert code function identities in math delimiters to inline code backticks` | **Rule ID Contention:** Issue #6 proposed `GFM-M14` for function identities (`\text{fix}(c) \equiv c`), while Session 1 proposed `GFM-M14` for variable identifiers (`snake_case` in math). Both address code syntax in math. | **Reconcile & Unify:** Merge both into **`GFM-M14 (code-syntax-in-math)`** alongside `GFM-M03` consolidation. Sub-pattern A handles function identities; Sub-pattern B handles variable/register identifiers. | **Open**<br/>Phase 2 (v0.2.0)<br/>`PR 2.6` |
+| **#6** | `Propose 'GFM-M14' rule to detect and convert code function identities in math delimiters to inline code backticks` | **Rule ID Contention:** Issue #6 proposed `GFM-M14` for function identities (`\text{fix}(c) \equiv c`), while Session 1 proposed `GFM-M14` for variable identifiers (`snake_case` in math). Both address code syntax in math. | **Reconcile & Unify:** Merge both into **`GFM-M14 (code-syntax-in-math)`** alongside `GFM-M03` consolidation. Sub-pattern A handles function identities; Sub-pattern B handles variable/register identifiers. | **Closed / Resolved**<br/>Phase 2 (`v0.2.0`) |
 | **#7** | `feat(rules): expand GFM-S01 shell scanner to cover gh issue create and gh pr create` | **Complementary Enhancement:** Low-risk, high-value regex extension to `RuleS01` in [`shell_rules.py`](src/gfm_math_lint/rules/shell_rules.py). | **Incorporated into Phase 1:** Extended `GH_CALL_PATTERN` regex in `RuleS01` and added unit test suite. | **Closed / Merged**<br/>PR #14<br/>`v0.1.2` |
 | **#8** | `feat(cli): support safe issue and PR creation with REST API fallback in publishing workflow` | **Publishing Counterpart to #7:** Safely opens GitHub issues/PRs without shell quoting corruption, with graceful REST API fallback. | **Implemented in Full (Scope Now Frozen):** Added `--create-issue` and `--create-pr` options with metadata support in `comment.py`/`cli.py`. No further GitHub client features will be added. | **Closed / Merged**<br/>PR #15<br/>`v0.1.2` |
 | **#9** | `feat(verify): support stdin input, raw HTML streaming, and MathML stacking detection in verifier` | **Direct Alignment with Verifier Patch:** Requested stdin (`-`), `--stdout` streaming, and MathML stacking detection in [`verifier.py`](src/gfm_math_lint/verifier.py). | **Integrated into PR 1.3:** Added stdin streaming, `--stdout` output, and MathML stacking heuristics directly into `GFMHTMLValidator`. | **Closed / Merged**<br/>PR #13<br/>`v0.1.2` |
-| **#22** | `[GFM-T01] Suggesting '&#124;' inside table math breaks GitHub MathJax, and single-escaped '\%' inside math is not flagged` | **Table Pipe Entities & CommonMark `\%` Stripping:** Bug 1 exposes that HTML entities (`&#124;`) inside `$...$` are not decoded before MathJax; Bug 2 exposes CommonMark unescaping `\%` $\to$ `%` (TeX comment). | **Upgrade `GFM-T01` & Extend `GFM-M15`:** Replace `&#124;` in `RuleT01` with portable `\lvert...\rvert` / `\lVert...\rVert` / `\vert`, flag HTML pipe entities in math, and flag bare `%` / single-escaped `\%` in `$...$` and `$$...$$` via `GFM-M15`. | **Open**<br/>Phase 2 (v0.2.0)<br/>`PR 2.4` & `PR 2.6` |
+| **#22** | `[GFM-T01] Suggesting '&#124;' inside table math breaks GitHub MathJax, and single-escaped '\%' inside math is not flagged` | **Table Pipe Entities & CommonMark `\%` Stripping:** Bug 1 exposes that HTML entities (`&#124;`) inside `$...$` are not decoded before MathJax; Bug 2 exposes CommonMark unescaping `\%` $\to$ `%` (TeX comment). | **Upgrade `GFM-T01` & Extend `GFM-M15`:** Replace `&#124;` in `RuleT01` with portable `\lvert...\rvert` / `\lVert...\rVert` / `\vert`, flag HTML pipe entities in math, and flag bare `%` / single-escaped `\%` in `$...$` and `$$...$$` via `GFM-M15`. | **Closed / Resolved**<br/>Phase 2 (`v0.2.0`) |
 
 ---
 
@@ -903,4 +862,4 @@ The Conformance Crucible (`conformance/corpus/regressions/`) incorporates frozen
    - **Decision: ACCEPTED.** Enforce letter-named LaTeX macros (`\thinspace`, `\medspace`, `\thickspace`, `\negthinspace`, `\lbrace`, `\rbrace`, `\lvert`, `\rvert`, `\Vert`, `\lt`, `\gt`, `\ast`, `\mathrm`) inside `$...$` and `$$...$$`, disallow mid-line `\\` (`GFM-M16`), and disallow CommonMark block-opening prefixes (`+ `, `- `, `> `, `#`, `1. `, setext underlines) at the start of display math lines (`GFM-M17`).
 
 ---
-*Roadmap synthesized from Session 1 (`session-harvest-trace-01`) and Session 2 ([`RETROSPECTIVE_2026-11_dual_doc_session.md`](RETROSPECTIVE_2026-11_dual_doc_session.md)), empirically validated against the codebase, CommonMark specification, KaTeX strict mode, and live GitHub `/markdown` API probes.*
+*Roadmap synthesized from Session 1 ([`session-01-hardware-telemetry.md`](docs/retrospectives/session-01-hardware-telemetry.md)) and Session 2 ([`session-02-dual-doc-conversion.md`](docs/retrospectives/session-02-dual-doc-conversion.md)), empirically validated against the codebase, CommonMark specification, KaTeX strict mode, and live GitHub `/markdown` API probes.*

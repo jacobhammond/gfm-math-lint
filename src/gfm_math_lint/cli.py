@@ -22,6 +22,7 @@ from gfm_math_lint.linter import (
     violation_to_dict,
 )
 from gfm_math_lint.probe import run_probes
+from gfm_math_lint.rules.base import SAFE_SUBSET_DOCS_URL, get_verification_docs_url
 from gfm_math_lint.rules.shell_rules import RuleS01
 from gfm_math_lint.verifier import (
     VerificationIssue,
@@ -37,7 +38,7 @@ def get_version() -> str:
     try:
         return metadata.version("gfm-math-lint")
     except metadata.PackageNotFoundError:
-        return "0.4.0"
+        return "1.0.0"
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -45,6 +46,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gfm-math-lint",
         description="Linter and auto-fixer for GitHub-Flavored Markdown math, tables, code fences, and Mermaid",
+        epilog=f"Safe Subset Cheat Sheet: {SAFE_SUBSET_DOCS_URL}",
     )
     parser.add_argument(
         "-V",
@@ -409,6 +411,9 @@ def cmd_check(args: argparse.Namespace) -> int:
         }
         sys.stdout.write(json.dumps(payload, indent=2) + "\n")
 
+    if args.format == "text" and total_violations > 0:
+        sys.stderr.write(f"Hint: Safe Subset Cheat Sheet: {SAFE_SUBSET_DOCS_URL}\n")
+
     if args.fix:
         return 1 if total_violations > 0 else 0
     if total_violations > 0 or total_modified > 0:
@@ -470,6 +475,9 @@ def cmd_check_shell(args: argparse.Namespace) -> int:
             "files": json_files,
         }
         sys.stdout.write(json.dumps(payload, indent=2) + "\n")
+
+    if args.format == "text" and total_violations > 0:
+        sys.stderr.write(f"Hint: Safe Subset Cheat Sheet: {SAFE_SUBSET_DOCS_URL}\n")
 
     if total_violations > 0:
         return 1
@@ -588,6 +596,7 @@ def _verification_issue_to_dict(issue: VerificationIssue) -> dict[str, Any]:
         "severity": issue.severity,
         "message": issue.message,
         "snippet": issue.snippet,
+        "docs_url": get_verification_docs_url(issue.category),
     }
 
 
@@ -710,6 +719,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
         if error_count > 0:
             if not is_json:
                 sys.stderr.write(f"Verification failed: {error_count} rendering anomaly(ies) detected.\n")
+                if args.format == "text":
+                    sys.stderr.write(f"Hint: Safe Subset Cheat Sheet: {SAFE_SUBSET_DOCS_URL}\n")
             return 1
 
         if not is_json:
@@ -839,6 +850,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
     if total_errors > 0:
         if not is_json:
             sys.stderr.write(f"Verification failed: {total_errors} rendering anomaly(ies) detected.\n")
+            if args.format == "text":
+                sys.stderr.write(f"Hint: Safe Subset Cheat Sheet: {SAFE_SUBSET_DOCS_URL}\n")
         return 1
 
     if not is_json:

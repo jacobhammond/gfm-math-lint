@@ -1,12 +1,28 @@
 - id: gfm-math-lint
   name: gfm-math-lint (GFM math & Markdown rule validator)
+  description: Check Markdown files for GFM math, table, code fence, and Mermaid rendering issues.
   entry: gfm-math-lint check
+  language: python
+  types: [markdown]
+
+- id: gfm-math-fix
+  name: gfm-math-fix (GFM math & Markdown auto-fixer)
+  description: Automatically fix safe GFM math, table, code fence, and Mermaid violations in-place.
+  entry: gfm-math-lint fix
+  language: python
+  types: [markdown]
+
+- id: gfm-math-verify
+  name: gfm-math-verify (Offline GFM differential verifier)
+  description: Run local differential math-span emulation and pure-Python LaTeX validation on Markdown files.
+  entry: gfm-math-lint verify
   language: python
   types: [markdown]
 
 - id: gfm-shell-lint
   name: gfm-shell-lint (Unsafe GFM CLI script checker)
+  description: Scan shell scripts and GitHub Actions workflows for unsafe double-quoted math expansion in gh commands.
   entry: gfm-math-lint check-shell
   language: python
   types_or: [shell, yaml]
-  files: ^(\.github/workflows/|scripts/)
+  files: ^(\.github/workflows/|scripts/|actions/)

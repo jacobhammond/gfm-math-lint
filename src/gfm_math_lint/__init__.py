@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from gfm_math_lint.config import LintConfig, load_config
 from gfm_math_lint.linter import Linter, LintResult, SpanDiffTelemetry
-from gfm_math_lint.rules.base import Rule, Violation
+from gfm_math_lint.rules.base import SAFE_SUBSET_DOCS_URL, Rule, Violation, get_safe_subset_url
 
 if TYPE_CHECKING:
     from gfm_math_lint.latex import LaTeXIssue, validate_latex
@@ -28,9 +28,10 @@ if TYPE_CHECKING:
 try:
     __version__ = metadata.version("gfm-math-lint")
 except metadata.PackageNotFoundError:
-    __version__ = "0.4.0"
+    __version__ = "1.0.0"
 
 __all__: list[str] = [
+    "SAFE_SUBSET_DOCS_URL",
     "LaTeXIssue",
     "LintConfig",
     "LintResult",
@@ -43,6 +44,7 @@ __all__: list[str] = [
     "Violation",
     "__version__",
     "build_preview_html",
+    "get_safe_subset_url",
     "load_config",
     "run_probes",
     "validate_latex",

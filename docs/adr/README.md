@@ -13,3 +13,4 @@ This directory contains records of significant architectural and design decision
 | [0003](0003-lexical-zone-state-machine.md) | Lexical Zone State Machine vs. Full AST Parsing | 2026-09-30 | Accepted |
 | [0004](0004-live-github-api-oracle.md) | Live GitHub API Rendering Oracle for Visual Verification | 2026-09-30 | Accepted |
 | [0005](0005-hierarchical-block-context.md) | Hierarchical Block-Context Tracking & CommonMark Math Emulator | 2026-11-18 | Accepted |
+| [0006](0006-privacy-first-differential-verification.md) | Privacy-First Differential Verification & Synthetic Probe Calibration | 2026-11-25 | Accepted |

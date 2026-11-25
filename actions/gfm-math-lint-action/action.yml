@@ -1,0 +1,322 @@
+name: "GFM Math Lint"
+description: "Lint, auto-fix, verify, and probe GitHub-Flavored Markdown math, tables, code fences, and Mermaid diagrams."
+author: "Jacob Hammond"
+
+branding:
+  icon: "check-circle"
+  color: "blue"
+
+inputs:
+  mode:
+    description: "CLI subcommand to run: check, fix, verify, probe, or check-shell."
+    required: false
+    default: "check"
+  paths:
+    description: "Space-separated file or directory paths to inspect (ignored for probe)."
+    required: false
+    default: "."
+  target:
+    description: "Target rendering engine profile: dual, github, or vscode."
+    required: false
+    default: "dual"
+  format:
+    description: "Diagnostic output format: github, text, or json (probe supports text and json)."
+    required: false
+    default: "github"
+  config:
+    description: "Optional path to a pyproject.toml configuration file."
+    required: false
+    default: ""
+  version:
+    description: "gfm-math-lint version to install from PyPI (default: '1.0.0'), 'latest' for unpinned PyPI, or 'local' for action repo source."
+    required: false
+    default: "1.0.0"
+  python-version:
+    description: "Python version to provision with uv."
+    required: false
+    default: "3.11"
+  remote-verify:
+    description: "Pass --remote to verify (sends markdown to GitHub /markdown API)."
+    required: false
+    default: "false"
+  offline-probe:
+    description: "Pass --offline to probe (skips GitHub /markdown API call)."
+    required: false
+    default: "false"
+  strict-katex:
+    description: "Pass --strict-katex to verify (requires local Node katex)."
+    required: false
+    default: "false"
+  no-katex:
+    description: "Pass --no-katex to verify (disables local Node.js KaTeX validation)."
+    required: false
+    default: "false"
+  json-output:
+    description: "Optional path to write structured JSON diagnostics."
+    required: false
+    default: ""
+  post-comment:
+    description: "Post a PR summary comment via 'gfm-math-lint comment' when violations occur (requires pull-requests: write)."
+    required: false
+    default: "false"
+  github-token:
+    description: "GitHub token used for probe, verify --remote, or post-comment."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  exit-code:
+    description: "Exit code returned by gfm-math-lint (0 = clean, 1 = violations/anomalies, 2 = error)."
+    value: ${{ steps.run.outputs.exit-code }}
+  report-path:
+    description: "Path to the generated JSON report when json-output is configured."
+    value: ${{ steps.run.outputs.report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup uv
+      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install gfm-math-lint
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        VENV_DIR="$RUNNER_TEMP/gfm-math-lint-venv"
+        uv venv "$VENV_DIR"
+        if [ "$INPUT_VERSION" = "local" ]; then
+          uv pip install --python "$VENV_DIR/bin/python" "$ACTION_PATH/../.."
+        elif [ -z "$INPUT_VERSION" ] || [ "$INPUT_VERSION" = "latest" ]; then
+          uv pip install --python "$VENV_DIR/bin/python" "gfm-math-lint"
+        else
+          uv pip install --python "$VENV_DIR/bin/python" "gfm-math-lint==$INPUT_VERSION"
+        fi
+
+    - name: Run gfm-math-lint
+      id: run
+      shell: bash
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_PATHS: ${{ inputs.paths }}
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_REMOTE_VERIFY: ${{ inputs.remote-verify }}
+        INPUT_OFFLINE_PROBE: ${{ inputs.offline-probe }}
+        INPUT_STRICT_KATEX: ${{ inputs.strict-katex }}
+        INPUT_NO_KATEX: ${{ inputs.no-katex }}
+        INPUT_JSON_OUTPUT: ${{ inputs.json-output }}
+        INPUT_POST_COMMENT: ${{ inputs.post-comment }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        set -uo pipefail
+        VENV_DIR="$RUNNER_TEMP/gfm-math-lint-venv"
+        PY="$VENV_DIR/bin/python"
+        BIN="$VENV_DIR/bin/gfm-math-lint"
+
+        case "$INPUT_MODE" in
+          check|fix|verify|probe|check-shell) ;;
+          *)
+            echo "::error::Invalid gfm-math-lint mode: $INPUT_MODE"
+            exit 2
+            ;;
+        esac
+
+        case "$INPUT_TARGET" in
+          dual|github|vscode) ;;
+          *)
+            echo "::error::Invalid gfm-math-lint target: $INPUT_TARGET"
+            exit 2
+            ;;
+        esac
+
+        case "$INPUT_FORMAT" in
+          github|text|json) ;;
+          *)
+            echo "::error::Invalid gfm-math-lint format: $INPUT_FORMAT"
+            exit 2
+            ;;
+        esac
+
+        path_args=()
+        if [ "$INPUT_MODE" != "probe" ] && [ -n "$INPUT_PATHS" ]; then
+          while IFS= read -r -d '' p; do
+            path_args+=("$p")
+          done < <("$PY" -c 'import os, shlex, sys; sys.stdout.write("\0".join(shlex.split(os.environ.get("INPUT_PATHS", ""))) + "\0")')
+        fi
+
+        need_json=0
+        if [ -n "$INPUT_JSON_OUTPUT" ] || [ "$INPUT_POST_COMMENT" = "true" ]; then
+          need_json=1
+        fi
+
+        run_format="$INPUT_FORMAT"
+        if [ "$need_json" -eq 1 ]; then
+          run_format="json"
+        fi
+
+        cmd=("$BIN" "$INPUT_MODE")
+        if [ "$INPUT_MODE" = "check" ] || [ "$INPUT_MODE" = "fix" ]; then
+          cmd+=("--target" "$INPUT_TARGET" "--format" "$run_format")
+          if [ -n "$INPUT_CONFIG" ]; then
+            cmd+=("--config" "$INPUT_CONFIG")
+          fi
+        elif [ "$INPUT_MODE" = "check-shell" ]; then
+          cmd+=("--format" "$run_format")
+        elif [ "$INPUT_MODE" = "verify" ]; then
+          cmd+=("--format" "$run_format")
+          if [ -n "$INPUT_CONFIG" ]; then
+            cmd+=("--config" "$INPUT_CONFIG")
+          fi
+          if [ "$INPUT_REMOTE_VERIFY" = "true" ]; then
+            cmd+=("--remote")
+          fi
+          if [ "$INPUT_STRICT_KATEX" = "true" ]; then
+            cmd+=("--strict-katex")
+          fi
+          if [ "$INPUT_NO_KATEX" = "true" ]; then
+            cmd+=("--no-katex")
+          fi
+        elif [ "$INPUT_MODE" = "probe" ]; then
+          if [ "$run_format" = "json" ]; then
+            cmd+=("--format" "json")
+          fi
+          if [ "$INPUT_OFFLINE_PROBE" = "true" ]; then
+            cmd+=("--offline")
+          fi
+        fi
+
+        if [ "$INPUT_MODE" != "probe" ] && [ "${#path_args[@]}" -gt 0 ]; then
+          cmd+=("${path_args[@]}")
+        fi
+
+        report_path=""
+        if [ "$need_json" -eq 1 ]; then
+          if [ -n "$INPUT_JSON_OUTPUT" ]; then
+            mkdir -p "$(dirname "$INPUT_JSON_OUTPUT")"
+            json_file="$INPUT_JSON_OUTPUT"
+            report_path="$INPUT_JSON_OUTPUT"
+          else
+            json_file="$RUNNER_TEMP/gfm-math-lint-report.json"
+          fi
+
+          set +e
+          "${cmd[@]}" > "$json_file"
+          exit_code=$?
+          set -e
+
+          if [ "$INPUT_FORMAT" = "json" ]; then
+            cat "$json_file"
+          else
+            REPORT_JSON_FILE="$json_file" "$PY" - << 'PYEOF'
+        import json, os, sys
+        from gfm_math_lint.linter import _escape_workflow_data, _escape_workflow_property
+
+        path = os.environ["REPORT_JSON_FILE"]
+        fmt = os.environ.get("INPUT_FORMAT", "github")
+        mode = os.environ.get("INPUT_MODE", "check")
+        try:
+            data = json.loads(open(path, encoding="utf-8").read())
+        except Exception:
+            sys.exit(0)
+
+        if mode in ("check", "fix"):
+            for f in data.get("files", []):
+                fpath = f.get("file", "")
+                if mode == "fix" and f.get("modified") and fmt == "text":
+                    print(f"Fixed {len(f.get('fixed_violations', []))} violation(s) in {fpath}")
+                for v in f.get("remaining_violations", []):
+                    if fmt == "github":
+                        print(f"::{v.get('severity', 'error')} file={_escape_workflow_property(fpath)},line={v.get('line', 1)},col={v.get('col', 1)},title={_escape_workflow_property(v.get('rule_id', ''))}::{_escape_workflow_data(v.get('message', ''))}")
+                    else:
+                        print(f"{fpath}:{v.get('line', 1)}:{v.get('col', 1)}: [{v.get('rule_id', '')}] ({v.get('severity', 'error')}) {v.get('message', '')}")
+        elif mode == "check-shell":
+            for f in data.get("files", []):
+                fpath = f.get("file", "")
+                for v in f.get("violations", []):
+                    if fmt == "github":
+                        print(f"::{v.get('severity', 'error')} file={_escape_workflow_property(fpath)},line={v.get('line', 1)},col={v.get('col', 1)},title={_escape_workflow_property(v.get('rule_id', ''))}::{_escape_workflow_data(v.get('message', ''))}")
+                    else:
+                        print(f"{fpath}:{v.get('line', 1)}:{v.get('col', 1)}: [{v.get('rule_id', '')}] ({v.get('severity', 'error')}) {v.get('message', '')}")
+        elif mode == "verify":
+            for f in data.get("files", []):
+                fpath = f.get("file", "")
+                if fmt == "text":
+                    print(f"{fpath}: Recognized {f.get('received_count', 0)}/{f.get('intended_count', 0)} math spans")
+                for iss in f.get("issues", []):
+                    if fmt == "github":
+                        lvl = "warning" if iss.get("severity") == "warning" else "error"
+                        print(f"::{lvl} file={_escape_workflow_property(fpath)},title={_escape_workflow_property(iss.get('category', ''))}::{_escape_workflow_data(iss.get('message', ''))}")
+                    else:
+                        print(f"{fpath}: [{iss.get('category', '')}] {iss.get('message', '')}")
+        elif mode == "probe":
+            print(f"GFM Probe Calibration ({data.get('mode', 'remote')} mode): {data.get('passed', 0)}/{data.get('total', 0)} passed")
+        PYEOF
+          fi
+        else
+          set +e
+          "${cmd[@]}"
+          exit_code=$?
+          set -e
+        fi
+
+        {
+          echo "exit-code=$exit_code"
+          echo "report-path=$report_path"
+        } >> "$GITHUB_OUTPUT"
+
+        if [ "$INPUT_POST_COMMENT" = "true" ] && [ "$exit_code" -ne 0 ] && [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+          comment_file="$RUNNER_TEMP/gfm-math-lint-comment.md"
+          REPORT_JSON_FILE="$json_file" ACTION_EXIT_CODE="$exit_code" "$PY" - << 'PYEOF' > "$comment_file"
+        import json, os
+
+        mode = os.environ.get("INPUT_MODE", "check")
+        target = os.environ.get("INPUT_TARGET", "dual")
+        exit_code = os.environ.get("ACTION_EXIT_CODE", "1")
+        path = os.environ["REPORT_JSON_FILE"]
+        lines = [
+            f"## gfm-math-lint Report (`{mode}`)",
+            "",
+            f"- **Target profile:** `{target}`",
+            f"- **Exit code:** `{exit_code}`",
+        ]
+        try:
+            data = json.loads(open(path, encoding="utf-8").read())
+            summary = data.get("summary", {})
+            if summary:
+                summary_parts = ", ".join(f"{k}: `{v}`" for k, v in summary.items())
+                lines.append(f"- **Summary:** {summary_parts}")
+            findings = []
+            for f in data.get("files", []):
+                fpath = f.get("file", "")
+                for v in f.get("remaining_violations", f.get("violations", [])):
+                    findings.append(f"- `{fpath}:{v.get('line', 1)}` **[{v.get('rule_id', '')}]** {v.get('message', '')}")
+                for iss in f.get("issues", []):
+                    findings.append(f"- `{fpath}` **[{iss.get('category', '')}]** {iss.get('message', '')}")
+            if findings:
+                lines.append("")
+                lines.append("### Findings")
+                lines.extend(findings[:20])
+                if len(findings) > 20:
+                    lines.append(f"- ...and {len(findings) - 20} more.")
+        except Exception:
+            pass
+        lines.extend([
+            "",
+            "- **Reference:** [Safe Subset Cheat Sheet](https://github.com/jacobhammond/gfm-math-lint/blob/main/docs/safe-subset-cheatsheet.md)",
+        ])
+        print("\n".join(lines))
+        PYEOF
+          if ! "$BIN" comment --pr "$PR_NUMBER" --file "$comment_file"; then
+            echo "::warning::Failed to post PR summary comment (ensure pull-requests: write permission)."
+          fi
+        fi
+
+        exit "$exit_code"

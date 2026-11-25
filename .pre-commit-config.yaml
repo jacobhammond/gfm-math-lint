@@ -100,4 +100,4 @@ repos:
         entry: uv run --no-sync gfm-math-lint check-shell
         language: system
         types_or: [shell, yaml]
-        files: ^(\.github/workflows/|scripts/)
+        files: ^(\.github/workflows/|scripts/|actions/)

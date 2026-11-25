@@ -15,6 +15,7 @@ from gfm_math_lint.config import LintConfig
 from gfm_math_lint.emulator import SpanDiff, emulate_gfm_document
 from gfm_math_lint.fixer import LintEdit, apply_edits, generate_unified_diff
 from gfm_math_lint.rules import ALL_MARKDOWN_RULES, Rule, Violation
+from gfm_math_lint.rules.base import get_safe_subset_url
 from gfm_math_lint.tokenizer import DocumentZone, Zone, scan_document_zones
 
 BLOCK_DISABLE_RE = re.compile(r"<!--\s*gfm-math-lint-disable(?!\s*-next-line)(?:\s+(.*?))?\s*--!?>")
@@ -152,6 +153,7 @@ def violation_to_dict(v: Violation, file_path: str = "") -> dict[str, Any]:
         "col": v.col,
         "message": v.message,
         "fixable": v.edit is not None,
+        "docs_url": get_safe_subset_url(v.rule_id),
     }
     if file_path:
         data["file"] = file_path
@@ -516,10 +518,13 @@ class Linter:
         return result
 
 
-def format_violation_text(violation: Violation, file_path: str) -> str:
+def format_violation_text(violation: Violation, file_path: str, *, include_docs_url: bool = False) -> str:
     """Format violation as standard terminal text."""
     v = violation
-    return f"{file_path}:{v.line}:{v.col}: [{v.rule_id}] ({v.severity}) {v.message}"
+    base = f"{file_path}:{v.line}:{v.col}: [{v.rule_id}] ({v.severity}) {v.message}"
+    if include_docs_url:
+        return f"{base} ({get_safe_subset_url(v.rule_id)})"
+    return base
 
 
 def _escape_workflow_data(data: str) -> str:

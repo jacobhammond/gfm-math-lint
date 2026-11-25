@@ -73,14 +73,16 @@ Represents an individual rule violation.
 
 #### Attributes:
 - **`rule_id`** (`str`): Unique identifier (e.g. `"GFM-M03"`).
-- **`rule_name`** (`str`): Human-readable rule name (e.g. `"text-mode-underscore-escape"`).
 - **`message`** (`str`): Explanation of the issue and remediation.
 - **`line`** (`int`): 1-indexed line number where violation begins.
 - **`col`** (`int`): 1-indexed column number where violation begins.
-- **`end_line`** (`int`): 1-indexed line number where violation ends.
-- **`end_col`** (`int`): 1-indexed column number where violation ends.
-- **`severity`** (`Severity`): `Severity.ERROR` or `Severity.WARNING`.
-- **`fix`** (`tuple | None`): Replacement tuple `(start_line, start_col, end_line, end_col, replacement_text)` if automated fix is available.
+- **`severity`** (`str`): `"error"` or `"warning"`.
+- **`edit`** (`LintEdit | None`): Replacement edit object if an automated fix is available.
+
+#### Diagnostic Formatting & Cheat Sheet Helpers:
+- **`SAFE_SUBSET_DOCS_URL`** (`str`): Canonical URL for the one-page Safe Subset Cheat Sheet.
+- **`get_safe_subset_url(rule_id: str | None = None) -> str`**: Returns the Safe Subset Cheat Sheet URL anchored to the rule's section.
+- **`format_violation_text(violation: Violation, file_path: str, *, include_docs_url: bool = False) -> str`**: Formats a violation for terminal output, optionally appending the cheat sheet URL.
 
 ---
 
